@@ -1,0 +1,10 @@
+{
+  "name": "context-hub",
+  "version": "0.3.0",
+  "description": "nwdesigns context hub: MCP server and session check-in",
+  "author": {
+    "name": "nwdesigns"
+  },
+  "mcpServers": "./codex.mcp.json",
+  "hooks": "./hooks/codex-hooks.json"
+}

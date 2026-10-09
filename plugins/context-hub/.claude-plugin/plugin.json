@@ -1,0 +1,9 @@
+{
+  "name": "context-hub",
+  "version": "0.3.0",
+  "description": "nwdesigns context hub: session check-in and the hub pane (notices and message text, UI only; hub tools come from the claude.ai connector)",
+  "author": {
+    "name": "nwdesigns"
+  },
+  "types": "./types/index.d.ts"
+}

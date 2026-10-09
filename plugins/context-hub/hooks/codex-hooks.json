@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" ] || sh \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/hooks/session-start\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
