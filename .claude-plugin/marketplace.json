@@ -4,12 +4,5 @@
   "owner": {
     "name": "nwdesigns"
   },
-  "plugins": [
-    {
-      "name": "context-hub",
-      "description": "nwdesigns context hub: session check-in and the hub pane",
-      "version": "0.3.0",
-      "source": "./plugins/context-hub"
-    }
-  ]
+  "plugins": []
 }

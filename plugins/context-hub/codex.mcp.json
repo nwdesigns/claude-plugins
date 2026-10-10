@@ -1,5 +1,0 @@
-{
-  "mcpServers": {
-    "nwdesigns": { "type": "streamable-http", "url": "https://hub.nwdesigns.it/mcp" }
-  }
-}
