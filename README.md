@@ -1,8 +1,12 @@
 # claude-plugins
 
-The `context-hub` plugin was removed on 2026-10-10. The nwdesigns hub needs no plugin: connect to it directly.
+The nwdesigns plugin marketplace for Claude Code and Codex. It will collect the skills that nwdesigns members create. Today it lists no plugin.
 
-## Remove the old plugin
+## The old context-hub plugin
+
+The `context-hub` plugin was removed on 2026-10-10. The nwdesigns hub needs no plugin: connect to it directly (see below).
+
+### Remove it
 
 ```
 claude plugin uninstall context-hub@nwdesigns
@@ -16,7 +20,7 @@ If you enabled desktop notices, also stop the notify unit:
 - macOS: `launchctl bootout gui/$(id -u)/it.nwdesigns.context-hub-notify`, then delete `~/Library/LaunchAgents/it.nwdesigns.context-hub-notify.plist`.
 - Linux: `systemctl --user disable --now context-hub-notify`.
 
-## Connect to the hub
+### Connect to the hub
 
 The hub is one MCP server: `https://hub.nwdesigns.it/mcp`. Sign in with your nwdesigns.it Google account.
 
