@@ -1,0 +1,19 @@
+// The $.state contract of nwdesigns-mods: every value is the session's.
+
+// mode: the permission mode of the last prompt; userSet: /effort typed this session.
+export type NwdesignsModsEffort = { mode: string; userSet: boolean };
+
+declare module "claude-code" {
+  interface PluginState {
+    "nwdesigns-mods": {
+      edits: number; // edits since the last passed check
+      gen: number; // monotonic edit generation, never reset
+      checked: boolean;
+      context: number; // the last main-thread context fill, in percent
+      rec: boolean;
+      writes: Record<string, number>; // realPath → mtime of this session's writes
+      bashRuns: [number, number][]; // [start, end] ms of this session's Bash runs
+      effort: NwdesignsModsEffort | null;
+    };
+  }
+}

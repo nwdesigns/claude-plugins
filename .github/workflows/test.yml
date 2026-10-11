@@ -1,0 +1,23 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  bun-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: bun test in each plugin
+        run: |
+          set -e
+          for dir in plugins/*/; do
+            if [ -f "$dir/bunfig.toml" ]; then
+              echo "::group::$dir"
+              (cd "$dir" && bun test)
+              echo "::endgroup::"
+            fi
+          done

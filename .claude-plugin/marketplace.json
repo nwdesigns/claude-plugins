@@ -4,5 +4,12 @@
   "owner": {
     "name": "nwdesigns"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "nwdesigns-mods",
+      "description": "nwdesigns team mods: secret redaction, Blast Radius, collision guard, recording mode, completion check, plan-mode effort and a status band",
+      "version": "0.1.0",
+      "source": "./plugins/nwdesigns-mods"
+    }
+  ]
 }

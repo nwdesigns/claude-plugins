@@ -1,0 +1,13 @@
+nwdesigns-mods
+Copyright 2026 nwdesigns
+
+This plugin contains a modified copy of Blast Radius, from
+https://github.com/anthropics/claude-code-playground
+(claude-code/mods/blast-radius/blast-radius.mjs, commit
+e9ab132d4575390ecbadfc54649712432b1a3351).
+
+  Copyright 2026 Anthropic PBC
+  Licensed under the Apache License, Version 2.0.
+
+Modified files: hooks/blast-radius.tsx and lib/blast.ts. Each one carries
+the upstream copyright line, the SPDX line and a notice of the changes.
