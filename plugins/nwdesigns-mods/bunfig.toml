@@ -1,0 +1,4 @@
+[test]
+# Only the pure lib tests (tests/*.spec.ts): hooks/register.test.ts needs the Claude Code
+# plugin runtime (claude-code/testing) and runs under `claude plugin test`.
+root = "tests"

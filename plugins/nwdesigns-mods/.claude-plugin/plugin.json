@@ -1,0 +1,67 @@
+{
+  "name": "nwdesigns-mods",
+  "version": "0.1.0",
+  "description": "nwdesigns team mods: secret redaction, Blast Radius, collision guard, recording mode, completion check, plan-mode effort and a status band.",
+  "author": {
+    "name": "nwdesigns"
+  },
+  "license": "Apache-2.0",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "secretRedact": {
+      "type": "boolean",
+      "title": "Secret redaction",
+      "description": "Redact secrets in every tool result before the transcript stores it and the model reads it: the values of the project .env, .env.local and .env.production, the files in extraSecretFiles, and known token formats. A redaction failure withholds the result. Not a guarantee: unknown formats and split values pass.",
+      "default": true
+    },
+    "extraSecretFiles": {
+      "type": "string",
+      "title": "Extra secret files",
+      "description": "More files whose values are redacted, split by commas (~ allowed). A .json file is read as JSON, any other as KEY=value lines. Each one is required: if it cannot be read or parsed and no earlier values are cached, every tool result is withheld.",
+      "default": ""
+    },
+    "blastRadius": {
+      "type": "boolean",
+      "title": "Blast Radius",
+      "description": "Hold a risky Bash command (rm with -r or -f, git reset --hard, git clean, force push, migrations, wp db reset/drop/import, wp search-replace on a non-local target, rsync --delete) and show what it would change, with Proceed and Cancel.",
+      "default": true
+    },
+    "statusBand": {
+      "type": "boolean",
+      "title": "Status band",
+      "description": "An attention list above the prompt, empty at rest: REC, a context at 50% or more, edits since the last check, a passed check. Only the buttons that apply, on keys 1 to 3.",
+      "default": true
+    },
+    "collisionGuard": {
+      "type": "boolean",
+      "title": "Collision guard",
+      "description": "Before a Write or Edit, ask when the file changed in the last collisionMinutes and not by this session (another session, an editor). Advisory: mtime does not prove who wrote it, and Bash writes are not covered.",
+      "default": true
+    },
+    "collisionMinutes": {
+      "type": "number",
+      "title": "Collision window",
+      "description": "Minutes the collision guard looks back.",
+      "default": 10
+    },
+    "recording": {
+      "type": "boolean",
+      "title": "Recording mode",
+      "description": "Register /rec: mask emails, keys, IBANs and amounts on screen in transcript messages and tool rows. Screen only, regex masks, not a security boundary.",
+      "default": true
+    },
+    "completionCheck": {
+      "type": "string",
+      "title": "Completion check",
+      "description": "On Stop, check the last message for rationalization patterns. shadow: log to ~/.claude/logs/completion-check.jsonl only. block: refuse the stop once. off: nothing.",
+      "options": ["shadow", "block", "off"],
+      "default": "shadow"
+    },
+    "planXhigh": {
+      "type": "boolean",
+      "title": "Plan mode xhigh",
+      "description": "In plan mode, send each main-loop model request at xhigh effort. An /effort typed in the session turns it off for that session.",
+      "default": true
+    }
+  }
+}
