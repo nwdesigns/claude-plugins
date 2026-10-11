@@ -4,8 +4,8 @@
 // Modified by nwdesigns, 2026-10-11: from blast-radius.mjs of
 // anthropics/claude-code-playground (see NOTICE). Changes: TypeScript and
 // JSX; the classifier moved to lib/blast.ts; WP-CLI and `rsync --delete`
-// measured; the band fallback composes with the other band rows (next(e)
-// first); isHolding() for the status band; deny texts name nwdesigns-mods.
+// measured; the band fallback is a compact two-row form drawn above the
+// other band rows, which it keeps; isHolding() for the status band.
 //
 // Blast Radius: holds a risky Bash command and shows what it would change.
 //
@@ -170,13 +170,60 @@ export function registerBlastRadius(on: On): void {
       return rest;
     }
     const { Box } = $.ui.resolve(e);
+    // First and compact: the band can be a few rows high, and a button cut
+    // off below it cannot be pressed.
     return (
       <Box flexDirection="column">
+        {drawCompact($.ui.resolve(e), held, held.report)}
         {rest}
-        {draw($.ui.resolve(e), held, held.report)}
       </Box>
     );
   });
+}
+
+/** The band form: the summary and the buttons in two rows, no border, no list. */
+function drawCompact(
+  t: ReturnType<EngineInterface["ui"]["resolve"]>,
+  state: Held,
+  report: Report,
+) {
+  const { Box, Text, Button } = t;
+  const decide = (choice: Decision) => () => {
+    if (state.decision === null) {
+      state.decision = choice;
+    }
+  };
+  return (
+    <Box flexDirection="column">
+      <Text wrap="truncate-end">
+        <Text
+          bold
+          color="yellow"
+        >{`⚠ Blast Radius · ${state.command} · `}</Text>
+        <Text color="red" bold>
+          {report.summary}
+        </Text>
+      </Text>
+      <Box gap={2}>
+        <Button
+          key="proceed"
+          label="Proceed"
+          hotkey="1"
+          plain
+          onPress={decide("proceed")}
+        />
+        <Button
+          key="cancel"
+          label="Cancel"
+          hotkey="2"
+          plain
+          autoFocus
+          onPress={decide("cancel")}
+        />
+        <Text dimColor>widen the terminal for the file list</Text>
+      </Box>
+    </Box>
+  );
 }
 
 // Resolves a `cd` target to an absolute folder, or null if it doesn't exist.

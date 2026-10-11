@@ -38,14 +38,14 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 - **What you see:** a pane that shows what a risky command will change, with **Proceed** (key 1) and **Cancel** (key 2). Cancel has the focus.
 - **When:** `rm -r`/`rm -f`, `git reset --hard`, `git checkout -- .`, `git restore .`, `git clean`, a force push, a migration, `wp db reset|drop|import`, `wp search-replace` (see Limits), `rsync --delete`.
 - **Turn off:** `"blastRadius": false`.
-- **Limits:** it reads the command text only. It does not see a command inside a script: `rsync` inside `deploy.sh` is not caught. `wp search-replace` is held when it uses `--all-tables` or `--network`, runs through `@alias` or `--ssh`, or when the new value is a URL that is not local (`localhost`, `.test`, `.local`, `.ddev.site` are local). It does not know which database it changes: a replace typed on the live server with a local new value is not held. A remote `rsync` is held but not measured. If nobody answers in 10 minutes, the command is refused.
+- **Limits:** it reads the command text only. It does not see a command inside a script: `rsync` inside `deploy.sh` is not caught. `wp search-replace` is held when it uses `--all-tables` or `--network`, runs through `@alias` or `--ssh`, or when the new value is a URL that is not local (`localhost`, `.test`, `.local`, `.ddev.site` are local). It does not know which database it changes: a replace typed on the live server with a local new value is not held. A remote `rsync` is held but not measured. If the terminal is too narrow for the pane (below about 144 columns), a short form shows in the band above the prompt, with the same keys. If nobody answers in 10 minutes, the command is refused.
 
 ### Status band (`statusBand`)
 
 - **What you see:** one line above the prompt, empty at rest. `● REC` with **stop rec**. `context 52%` with **compact**. `3 edits since the last check` with **verify**. `checked, ready to push` with **push**. Keys 1 to 3 press the buttons.
 - **When:** a check is `bun test`, `bun run typecheck|lint`, `npm test`, `npm run lint|typecheck`, `composer test|lint`, `vendor/bin/phpunit`, `phpcs` or the `verify` skill. **verify** and **push** only fill the prompt box. You press Enter.
 - **Turn off:** `"statusBand": false`.
-- **Limits:** the band keeps the rows of other mods and adds its own row below them. While Blast Radius holds a command, the band shows no buttons.
+- **Limits:** the band keeps the rows of other mods and adds its own row below them. While Blast Radius holds a command, the band shows no buttons. In a short pane (about 13 rows) Claude Code gives the band no room, so nothing shows.
 
 ### Collision guard (`collisionGuard`, `collisionMinutes`)
 

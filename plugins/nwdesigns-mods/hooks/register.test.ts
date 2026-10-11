@@ -125,17 +125,19 @@ function world(on: On): World {
     if (e.tool === "Bash" && w.bash && !(await w.bash(String(e.command))))
       return { result: {}, isError: true } as never;
     if (e.tool === "AskUserQuestion") {
-      const q = e.questions[0]!.question;
+      const { questions } = e as unknown as { questions: { question: string }[] };
+      const q = questions[0]!.question;
       w.asks.push(q);
       return {
-        result: { questions: e.questions, answers: { [q]: w.answer } },
+        result: { questions, answers: { [q]: w.answer } },
       } as never;
     }
     if (w.deny !== undefined) return { deny: w.deny };
     w.core.push(String(e.tool));
     if (e.tool === "Write") {
-      w.files[e.file_path] ??= e.content; // a real Write creates the file
-      w.mtime[e.file_path] ??= w.clock.now();
+      const { file_path, content } = e as unknown as { file_path: string; content: string };
+      w.files[file_path] ??= content; // a real Write creates the file
+      w.mtime[file_path] ??= w.clock.now();
     }
     return { result: w.result ?? {} };
   });
