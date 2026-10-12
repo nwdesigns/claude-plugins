@@ -90,7 +90,13 @@ async function refusal($: EngineInterface, command: string): Promise<string> {
 }
 
 // null on a surface with no Input (mobile, vscode): the drawing beneath stays.
-function draw(t: ReturnType<EngineInterface["ui"]["resolve"]>, p: Pending) {
+// `redraw` after each keystroke: the field shows what was typed until the
+// hook draws it again, so the dots must be drawn at once.
+function draw(
+  t: ReturnType<EngineInterface["ui"]["resolve"]>,
+  p: Pending,
+  redraw: () => void,
+) {
   if (!("Input" in t)) return null;
   const { Box, Text, Input } = t;
   return (
@@ -113,6 +119,7 @@ function draw(t: ReturnType<EngineInterface["ui"]["resolve"]>, p: Pending) {
           while (kept < text.length && text[kept] === DOT) kept++;
           p.value =
             p.value.slice(0, Math.min(kept, p.value.length)) + text.slice(kept);
+          redraw();
         }}
         onSubmit={() => {
           p.answer = p.value;
@@ -251,14 +258,14 @@ export function registerSecretBox(on: On): void {
   on(
     "ui.render",
     { component: "Pane", requestId: PANE_ID },
-    ($, e, next) => (pending && draw($.ui.resolve(e), pending)) ?? next(e),
+    ($, e, next) => (pending && draw($.ui.resolve(e), pending, () => $.ui.invalidate("ui.render"))) ?? next(e),
   );
 
   // The band composes: the rows beneath stay, the box is drawn above them.
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     const rest = await next(e);
     if (pending?.where !== "band") return rest;
-    const box = draw($.ui.resolve(e), pending);
+    const box = draw($.ui.resolve(e), pending, () => $.ui.invalidate("ui.render"));
     if (!box) return rest;
     const { Box } = $.ui.resolve(e);
     return (
