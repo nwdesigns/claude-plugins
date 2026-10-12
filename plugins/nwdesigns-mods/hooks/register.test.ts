@@ -719,6 +719,10 @@ describe("secret-box", () => {
     await w.clock.settle();
     const ui = await box($);
     await ui.input({ key: "secret", text: VALUE, kind: "change" });
+    // The field is drawn again as dots: the typed text never stays on screen.
+    expect((await ui.find({ key: "secret" }))?.props).toMatchObject({
+      value: DOT.repeat(VALUE.length),
+    });
     await ui.input({ key: "secret", text: DOT.repeat(VALUE.length) });
     await w.clock.advance(300);
     const r = await call;
