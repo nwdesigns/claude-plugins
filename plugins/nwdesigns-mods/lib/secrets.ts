@@ -103,8 +103,16 @@ export function keep(name: string, v: string): boolean {
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Values a person typed into secret-box: always exact secrets, whatever their
+// name. In this module's memory only, like the file values.
+const HANDED = new Map<string, string>();
+export function handed(name: string, value: string): void {
+  if (value.length >= 6) HANDED.set(value, name);
+}
+export const handedCount = () => HANDED.size;
+
 export function buildMatcher(entries: Named[]): Matcher {
-  const names = new Map<string, string>();
+  const names = new Map(HANDED);
   for (const { name, value } of entries)
     if (keep(name, value) && !names.has(value)) names.set(value, name);
   const values = [...names.keys()].sort((a, b) => b.length - a.length);

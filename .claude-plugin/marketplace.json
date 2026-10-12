@@ -7,8 +7,8 @@
   "plugins": [
     {
       "name": "nwdesigns-mods",
-      "description": "nwdesigns team mods: secret redaction, Blast Radius, collision guard, recording mode, completion check, plan-mode effort and a status band",
-      "version": "0.1.0",
+      "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer and Diagram Pane",
+      "version": "0.2.0",
       "source": "./plugins/nwdesigns-mods"
     }
   ]

@@ -27,6 +27,7 @@ type World = {
   deny?: string; // the bottom answers with this deny instead
   fail?: Record<string, "stat" | "read" | "write">; // path → the fs call that fails (EACCES)
   placed: boolean; // what ui.open answers
+  staged?: string; // what `git diff --name-only` prints
 };
 
 function world(on: On): World {
@@ -101,9 +102,11 @@ function world(on: On): World {
     if (e.argv[0] === "sleep") await w.clock.sleep(Number(e.argv[1]) * 1000);
     // Blast Radius measures `rm` with a bash script: 2 files, 2 KB, 1 path.
     const stdout =
-      e.argv[0] === "bash" && String(e.argv[2]).includes("compgen")
-        ? "2 2048 1\nbuild/a.js\nbuild/b.js\n"
-        : "";
+      e.argv[0] === "git"
+        ? (w.staged ?? "")
+        : e.argv[0] === "bash" && String(e.argv[2]).includes("compgen")
+          ? "2 2048 1\nbuild/a.js\nbuild/b.js\n"
+          : "";
     return {
       value: {
         exitCode: 0,
@@ -125,7 +128,9 @@ function world(on: On): World {
     if (e.tool === "Bash" && w.bash && !(await w.bash(String(e.command))))
       return { result: {}, isError: true } as never;
     if (e.tool === "AskUserQuestion") {
-      const { questions } = e as unknown as { questions: { question: string }[] };
+      const { questions } = e as unknown as {
+        questions: { question: string }[];
+      };
       const q = questions[0]!.question;
       w.asks.push(q);
       return {
@@ -135,7 +140,10 @@ function world(on: On): World {
     if (w.deny !== undefined) return { deny: w.deny };
     w.core.push(String(e.tool));
     if (e.tool === "Write") {
-      const { file_path, content } = e as unknown as { file_path: string; content: string };
+      const { file_path, content } = e as unknown as {
+        file_path: string;
+        content: string;
+      };
       w.files[file_path] ??= content; // a real Write creates the file
       w.mtime[file_path] ??= w.clock.now();
     }
@@ -663,4 +671,203 @@ describe("secret-redact", () => {
     expect(w.argv).toContainEqual(["/bin/unlink", spill]);
     expect(r.deny).toBeUndefined();
   });
+});
+
+// ----------------------------------------------------------------- secret-box
+
+describe("secret-box", () => {
+  const TOOL = "mcp__nwdesigns-mods__request_secret";
+  // Not a credential name, and a value secret-redact alone would keep.
+  const VALUE = "correct-horse-battery-staple";
+  const DOT = "•";
+  const ask = (name = "SHOP_PHRASE") =>
+    ({ tool: TOOL, tool_use_id: "rs", name, reason: "the shop" }) as never;
+  const box = ($: Engine) =>
+    $.ui.mount({
+      plugin: PLUGIN,
+      surface: "terminal",
+      component: "Pane",
+      requestId: "secret-box",
+      props: { title: "secret-box", isFocused: true, bodyColumns: 80 } as never,
+    });
+
+  test("request_secret writes .env and .gitignore; the result never holds the value, a later result redacts it", async ($, on) => {
+    const w = world(on);
+    w.files[`${CWD}/.env`] = "A=1\n";
+    const call = $.tool.call(ask());
+    await w.clock.settle();
+    const ui = await box($);
+    await ui.input({ key: "secret", text: VALUE, kind: "change" });
+    await ui.input({ key: "secret", text: DOT.repeat(VALUE.length) });
+    await w.clock.advance(300);
+    const r = await call;
+    expect(JSON.stringify(r)).not.toContain(VALUE);
+    expect(String(r.result)).toContain("SHOP_PHRASE");
+    expect(w.files[`${CWD}/.env`]).toBe(`A=1\nSHOP_PHRASE=${VALUE}\n`);
+    expect(w.files[`${CWD}/.gitignore`]).toBe(".env\n");
+    w.result = { stdout: `phrase=${VALUE}` };
+    const later = await $.tool.call({
+      tool: "Bash",
+      tool_use_id: "b-cat",
+      command: "cat .env",
+    });
+    expect(later.result).toEqual({ stdout: "phrase=[REDACTED:SHOP_PHRASE]" });
+  });
+
+  test("Enter on an empty box cancels: nothing is written", async ($, on) => {
+    const w = world(on);
+    const call = $.tool.call(ask());
+    await w.clock.settle();
+    await (await box($)).input({ key: "secret", text: "" });
+    await w.clock.advance(300);
+    expect(String((await call).result)).toContain("cancelled");
+    expect(w.writes).toEqual([]);
+  });
+
+  test("git add .env and a commit with .env staged are denied; @.env is denied", async ($, on) => {
+    const w = world(on);
+    w.staged = ".env\nsrc/a.ts\n";
+    const bash = (command: string) =>
+      $.tool.call({ tool: "Bash", tool_use_id: "g", command });
+    expect((await bash("git add .env")).deny).toMatch(/staging a \.env/);
+    expect((await bash("git commit -m x")).deny).toMatch(/include a \.env/);
+    expect(w.core).toEqual([]);
+    const m = await $.prompt.mention({ path: `${CWD}/.env` } as never);
+    expect((m as { deny?: string }).deny).toMatch(/secret-box/);
+  });
+
+  test(
+    "option off: no tool, no guard",
+    { options: { secretBox: false } },
+    async ($, on) => {
+      const w = world(on);
+      await $.tool.call({
+        tool: "Bash",
+        tool_use_id: "g",
+        command: "git add .env",
+      });
+      expect(w.core).toEqual(["Bash"]);
+    },
+  );
+});
+
+// ------------------------------------------------------------- prompt-bouncer
+
+describe("prompt-bouncer", () => {
+  const BOUNCE =
+    '{"pass": false, "reason": "PPC is not a project term.", "suggestion": "aggiorna il deck Google Ads"}';
+  function bouncerWorld(on: On, reply: string | Error = BOUNCE) {
+    const w = world(on);
+    const asked: string[] = [];
+    w.files[`${CWD}/GLOSSARY.md`] = "| Term | Not |\n| Google Ads | PPC |\n";
+    on("session.messages", async () => ({ value: [] as never }));
+    on("model.complete", async (_$, e) => {
+      asked.push(e.prompt);
+      if (reply instanceof Error) throw reply;
+      return {
+        value: { isAnswered: true, text: reply, usage: {} } as never,
+      };
+    });
+    return { w, asked };
+  }
+
+  test("warn: the prompt enters at once, then a toast suggests the term", async ($, on) => {
+    const { w, asked } = bouncerWorld(on);
+    const r = await prompt($, "aggiorna il deck PPC");
+    expect(r.drop).toBeUndefined();
+    await w.clock.settle();
+    expect(asked[0]).toContain("Google Ads | PPC");
+    expect(w.toasts).toContain("Glossary: aggiorna il deck Google Ads");
+  });
+
+  test(
+    "block: the prompt is dropped with the suggestion",
+    { options: { promptBouncer: "block" } },
+    async ($, on) => {
+      bouncerWorld(on);
+      const r = await prompt($, "aggiorna il deck PPC");
+      expect(r.drop).toMatch(/Try: aggiorna il deck Google Ads.*\/force/);
+    },
+  );
+
+  test(
+    "block: a model throw lets the prompt in",
+    { options: { promptBouncer: "block" } },
+    async ($, on) => {
+      bouncerWorld(on, new Error("down"));
+      expect((await prompt($, "aggiorna il deck PPC")).drop).toBeUndefined();
+    },
+  );
+
+  test("no GLOSSARY.md: no model call", async ($, on) => {
+    const { w, asked } = bouncerWorld(on);
+    delete w.files[`${CWD}/GLOSSARY.md`];
+    await prompt($, "aggiorna il deck PPC");
+    await w.clock.settle();
+    expect(asked).toEqual([]);
+  });
+});
+
+// --------------------------------------------------------------- diagram-pane
+
+describe("diagram-pane", () => {
+  const REPLY =
+    "The flow:\n\n```mermaid\nflowchart TD\n  A[Cart] --> B[Pay]\n```\n";
+  const MAP =
+    '{"title":"checkout","nodes":[{"id":"a","label":"cart.ts","kind":"file"}],"edges":[]}';
+  const turn = ($: Engine) =>
+    $.turn.complete({
+      answer: REPLY,
+      durationMs: 1,
+      isAborted: false,
+      turnId: "t",
+      reason: "completed",
+    } as never);
+
+  test(
+    "a mermaid reply is pinned; the gate answers NO, so no second fork runs",
+    { options: { diagramPane: true, diagramEveryTurns: 1 } },
+    async ($, on) => {
+      const w = world(on);
+      let forks = 0;
+      let gates = 0;
+      on("session.messages", async () => ({
+        value: [
+          { role: "user", text: "draw it", toolUses: [] },
+          { role: "assistant", text: REPLY, toolUses: [] },
+        ] as never,
+      }));
+      on("session.id", async () => ({ value: "s1" as never }));
+      on("ui.panes", async () => ({ value: [] as never }));
+      on("turn.complete", async (_$, e) => ({ text: e.answer }));
+      on("model.fork", async () => {
+        forks++;
+        return { value: { isAnswered: true, text: MAP, usage: {} } as never };
+      });
+      on("model.complete", async () => {
+        gates++;
+        return { value: { isAnswered: true, text: "NO", usage: {} } as never };
+      });
+      await turn($);
+      await w.clock.settle();
+      await turn($);
+      await w.clock.settle();
+      expect([forks, gates]).toEqual([1, 1]);
+      const ui = await $.ui.mount({
+        plugin: PLUGIN,
+        surface: "terminal",
+        component: "Pane",
+        requestId: "diagram-pane",
+        props: {
+          title: "Diagrams",
+          isFocused: false,
+          bodyColumns: 60,
+        } as never,
+      });
+      const text = JSON.stringify(await ui.drawn());
+      expect(text).toContain("1 pinned");
+      expect(text).toContain("│ Cart │");
+      expect(text).toContain("checkout");
+    },
+  );
 });

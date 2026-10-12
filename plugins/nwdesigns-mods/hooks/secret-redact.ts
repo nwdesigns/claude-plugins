@@ -2,6 +2,7 @@ import type { EngineInterface, On, ToolCallResult } from "claude-code";
 
 import {
   buildMatcher,
+  handedCount,
   jsonLeaves,
   parseEnv,
   redactDeep,
@@ -85,7 +86,7 @@ async function matcher($: EngineInterface, extra: string[]): Promise<Matcher> {
     keys.push(`${path}@${c.mtimeMs}`);
     entries.push(...c.entries);
   }
-  const key = keys.join("\n");
+  const key = `${keys.join("\n")}\n${handedCount()}`;
   if (built?.key !== key) built = { key, matcher: buildMatcher(entries) };
   return built.matcher;
 }
@@ -112,7 +113,9 @@ async function scrubSpill(
   } catch (err) {
     // Unreadable, over a limit, or the rewrite failed: blank it, else delete
     // it. If both fail, say so and throw: the result is withheld.
-    $.ui.log(`nwdesigns-mods secret-redact: spill file withheld (${kind(err)})`);
+    $.ui.log(
+      `nwdesigns-mods secret-redact: spill file withheld (${kind(err)})`,
+    );
     const blanked = await $.fs.write(path, WITHHELD).then(
       () => true,
       () => false,
