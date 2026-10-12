@@ -14,16 +14,15 @@
 
 import type { EngineInterface, On } from "claude-code";
 
+import { gitCommits } from "../lib/blast.ts";
 import {
-  commitsAll,
   ensureIgnored,
-  isCommit,
   isEnvFile,
   stagesEnv,
   upsertEnv,
 } from "../lib/dotenv.ts";
 import { handed } from "../lib/secrets.ts";
-import { msg } from "../lib/util.ts";
+import { msg, resolvePath } from "../lib/util.ts";
 
 const TOOL = "mcp__nwdesigns-mods__request_secret";
 const PANE_ID = "secret-box";
@@ -64,19 +63,28 @@ async function save(
   return ".env (and added .env to .gitignore)";
 }
 
-// Why a Bash command is refused: it stages or commits a .env file.
+// Why a Bash command is refused: it stages or commits a .env file. Each
+// commit is checked in the repo it runs in: the folder a `cd` or `git -C`
+// earlier on the line moved to (`cd -` is unknown: the session folder).
 async function refusal($: EngineInterface, command: string): Promise<string> {
   if (stagesEnv(command)) return "staging a .env file is blocked.";
-  if (!isCommit(command)) return "";
-  const lists = [
-    await $.process.run(["git", "diff", "--cached", "--name-only"]),
-  ];
-  if (commitsAll(command))
-    lists.push(await $.process.run(["git", "diff", "--name-only"]));
-  const files = lists.flatMap((r) => r.stdout.split("\n"));
-  return files.some(isEnvFile)
-    ? "this commit would include a .env file. Unstage it with git rm --cached."
-    : "";
+  const commits = gitCommits(command);
+  if (commits.length === 0) return "";
+  const cwd = await $.session.cwd();
+  const home = (await $.env.get("HOME")) ?? "";
+  for (const { dir, all } of commits) {
+    const repo =
+      dir === null || dir === "-"
+        ? cwd
+        : resolvePath(dir === "~" ? "~/" : dir, home, cwd);
+    const git = (...args: string[]) =>
+      $.process.run(["git", "-C", repo, "diff", ...args], { cwd });
+    const lists = [await git("--cached", "--name-only")];
+    if (all) lists.push(await git("--name-only"));
+    if (lists.some((r) => r.stdout.split("\n").some(isEnvFile)))
+      return "this commit would include a .env file. Unstage it with git rm --cached.";
+  }
+  return "";
 }
 
 // null on a surface with no Input (mobile, vscode): the drawing beneath stays.

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { classify, isRemotePath } from "../lib/blast.ts";
+import { classify, gitCommits, isRemotePath } from "../lib/blast.ts";
 
 // The Blast Radius classifier: which Bash commands are held.
 
@@ -83,5 +83,18 @@ describe("blast-radius rsync holds", () => {
     expect(isRemotePath("rsync://host/mod")).toBe(true);
     expect(isRemotePath("./dist/")).toBe(false);
     expect(isRemotePath("/srv/a:b")).toBe(false);
+  });
+});
+
+describe("gitCommits", () => {
+  test("each commit with the folder it runs in and its -a", () => {
+    expect(gitCommits("cd app && git commit -am x; git -C ../lib commit -m y")).toEqual([
+      { dir: "app", all: true },
+      { dir: "app/../lib", all: false },
+    ]);
+    expect(gitCommits("(cd sub && make) && git commit --all")).toEqual([
+      { dir: null, all: true },
+    ]);
+    expect(gitCommits("git status && echo commit")).toEqual([]);
   });
 });

@@ -51,9 +51,3 @@ export function stagesEnv(command: string): boolean {
     /\.env\b(?!\.(example|sample|template|dist))/.test(command)
   );
 }
-
-export const isCommit = (command: string) =>
-  /\bgit\b[^;&|]*\bcommit\b/.test(command);
-// `git commit -a` also takes the unstaged tracked changes.
-export const commitsAll = (command: string) =>
-  /\s(-a|--all|-\w*a\w*)\b/.test(command);

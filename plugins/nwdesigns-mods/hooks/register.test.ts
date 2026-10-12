@@ -27,7 +27,7 @@ type World = {
   deny?: string; // the bottom answers with this deny instead
   fail?: Record<string, "stat" | "read" | "write">; // path → the fs call that fails (EACCES)
   placed: boolean; // what ui.open answers
-  staged?: string; // what `git diff --name-only` prints
+  git?: (argv: readonly string[]) => string; // what a git command prints
 };
 
 function world(on: On): World {
@@ -103,7 +103,7 @@ function world(on: On): World {
     // Blast Radius measures `rm` with a bash script: 2 files, 2 KB, 1 path.
     const stdout =
       e.argv[0] === "git"
-        ? (w.staged ?? "")
+        ? (w.git?.(e.argv) ?? "")
         : e.argv[0] === "bash" && String(e.argv[2]).includes("compgen")
           ? "2 2048 1\nbuild/a.js\nbuild/b.js\n"
           : "";
@@ -253,6 +253,15 @@ describe("status-band", () => {
     const lint = $.tool.call({ ...check, command: "npm run lint" });
     await w.clock.advance(1000);
     await lint;
+    expect(await bandText($)).toBe("1 edit since the last check");
+  });
+
+  test("a check in the background is not a pass", async ($, on) => {
+    const w = world(on);
+    await $.tool.call(write(`${CWD}/a.ts`));
+    await $.tool.call({ ...check, run_in_background: true } as never);
+    w.result = { backgroundTaskId: "bg1" }; // moved to the background mid-run
+    await $.tool.call(check);
     expect(await bandText($)).toBe("1 edit since the last check");
   });
 
@@ -542,6 +551,18 @@ describe("blast-radius", () => {
     await $.tool.call({ ...risky, command: "ls -la" });
     expect(w.core).toEqual(["Bash"]);
   });
+
+  test("reset --hard to a target on a clean tree reports the branch move", async ($, on) => {
+    const w = world(on);
+    w.git = (argv) => (argv[1] === "rev-list" ? "2\n" : "");
+    const call = $.tool.call({ ...risky, command: "git reset --hard HEAD~2" });
+    await w.clock.settle();
+    await (await pane($)).press({ key: "cancel" });
+    await w.clock.advance(250);
+    expect((await call).deny).toMatch(
+      /It would have: move the branch to HEAD~2, off 2 commits\./,
+    );
+  });
 });
 
 // -------------------------------------------------------------- secret-redact
@@ -726,7 +747,7 @@ describe("secret-box", () => {
 
   test("git add .env and a commit with .env staged are denied; @.env is denied", async ($, on) => {
     const w = world(on);
-    w.staged = ".env\nsrc/a.ts\n";
+    w.git = (argv) => (argv.includes("diff") ? ".env\nsrc/a.ts\n" : "");
     const bash = (command: string) =>
       $.tool.call({ tool: "Bash", tool_use_id: "g", command });
     expect((await bash("git add .env")).deny).toMatch(/staging a \.env/);
@@ -734,6 +755,17 @@ describe("secret-box", () => {
     expect(w.core).toEqual([]);
     const m = await $.prompt.mention({ path: `${CWD}/.env` } as never);
     expect((m as { deny?: string }).deny).toMatch(/secret-box/);
+  });
+
+  test("a commit is checked in the repo it runs in: cd and git -C", async ($, on) => {
+    const w = world(on);
+    // Only the other repo has .env staged.
+    w.git = (argv) => (argv[2] === `${CWD}/other` ? ".env\n" : "");
+    const bash = (command: string) =>
+      $.tool.call({ tool: "Bash", tool_use_id: "g", command });
+    expect((await bash("cd other && git commit -m x")).deny).toMatch(/\.env/);
+    expect((await bash("git -C other commit -m x")).deny).toMatch(/\.env/);
+    expect((await bash("git commit -m x")).deny).toBeUndefined();
   });
 
   test(

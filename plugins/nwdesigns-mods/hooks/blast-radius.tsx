@@ -6,6 +6,7 @@
 // JSX; the classifier moved to lib/blast.ts; WP-CLI and `rsync --delete`
 // measured; the band fallback is a compact two-row form drawn above the
 // other band rows, which it keeps; isHolding() for the status band.
+// 2026-10-12: `git reset --hard <target>` also reports the branch move.
 //
 // Blast Radius: holds a risky Bash command and shows what it would change.
 //
@@ -430,18 +431,53 @@ async function measureGit(
     ["git", "diff", "--shortstat", risk.kind === "git-reset" ? "HEAD" : "--"],
     { cwd, timeoutMs: 15000 },
   );
+  const discard =
+    lost.length === 0
+      ? "discard nothing: no uncommitted changes"
+      : `discard uncommitted changes in ${lost.length} ${lost.length === 1 ? "file" : "files"}`;
+  const note =
+    stat.stdout.trim() !== ""
+      ? `${stat.stdout.trim()}. Uncommitted changes can't be recovered.`
+      : "From git status --porcelain.";
+  const move =
+    risk.kind === "git-reset"
+      ? await measureResetTarget($, risk.args, cwd)
+      : null;
   return {
-    summary:
-      lost.length === 0
-        ? "discard nothing: no uncommitted changes"
-        : `discard uncommitted changes in ${lost.length} ${lost.length === 1 ? "file" : "files"}`,
+    summary: move
+      ? lost.length === 0
+        ? move
+        : `${move}; ${discard.replace(/^discard /, "and discard ")}`
+      : discard,
     lines: lost.slice(0, LIST_MAX).map((l) => `${l.slice(0, 2)} ${l.slice(3)}`),
     more: Math.max(0, lost.length - LIST_MAX),
-    note:
-      stat.stdout.trim() !== ""
-        ? `${stat.stdout.trim()}. Uncommitted changes can't be recovered.`
-        : "From git status --porcelain.",
+    note: move
+      ? `${note} Commits the branch leaves stay in git reflog for a while.`
+      : note,
   };
+}
+
+/** The branch move of `git reset --hard <target>`, or null when it stays at HEAD. */
+async function measureResetTarget(
+  $: EngineInterface,
+  args: string[],
+  cwd: string,
+): Promise<string | null> {
+  const target = args.find((a) => !a.startsWith("-"));
+  if (target === undefined || target === "HEAD") {
+    return null;
+  }
+  const run = await $.process.run(
+    ["git", "rev-list", "--count", `${target}..HEAD`, "--"],
+    { cwd, timeoutMs: 15000 },
+  );
+  const n = Number(run.stdout.trim());
+  if (run.exitCode !== 0 || !Number.isInteger(n)) {
+    return `move the branch to ${target} (could not count the commits)`;
+  }
+  return n === 0
+    ? `move the branch to ${target}`
+    : `move the branch to ${target}, off ${n} ${n === 1 ? "commit" : "commits"}`;
 }
 
 async function measurePush(
