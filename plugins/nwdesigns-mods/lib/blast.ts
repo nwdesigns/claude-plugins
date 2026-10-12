@@ -272,7 +272,7 @@ function classifySegment(words: string[], dir: string | null): Risk | null {
       };
     }
   }
-  if (cmd === "git") {
+  if (cmd === "git" || cmd.endsWith("/git")) {
     const { sub, rest, gitDir } = gitArgs(args, dir);
     if (sub === "reset" && rest.includes("--hard")) {
       return {

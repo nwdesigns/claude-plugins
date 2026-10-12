@@ -11,6 +11,7 @@ describe("blast-radius upstream holds", () => {
     expect(kind(`${RM} ./tmpdir`)).toBe("rm");
     expect(kind("sudo rm -r build")).toBe("rm");
     expect(kind("git reset --hard HEAD~1")).toBe("git-reset");
+    expect(kind("/usr/bin/git reset --hard HEAD~1")).toBe("git-reset");
     expect(kind("git clean -fdx")).toBe("git-clean");
     expect(kind("git push --force origin main")).toBe("git-push-force");
     expect(kind("git checkout -- .")).toBe("git-checkout");
