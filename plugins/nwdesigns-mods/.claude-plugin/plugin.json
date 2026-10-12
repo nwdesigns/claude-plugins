@@ -1,7 +1,7 @@
 {
   "name": "nwdesigns-mods",
-  "version": "0.1.0",
-  "description": "nwdesigns team mods: secret redaction, Blast Radius, collision guard, recording mode, completion check, plan-mode effort and a status band.",
+  "version": "0.2.0",
+  "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer and Diagram Pane.",
   "author": {
     "name": "nwdesigns"
   },
@@ -54,7 +54,11 @@
       "type": "string",
       "title": "Completion check",
       "description": "On Stop, check the last message for rationalization patterns. shadow: log to ~/.claude/logs/completion-check.jsonl only. block: refuse the stop once. off: nothing.",
-      "options": ["shadow", "block", "off"],
+      "options": [
+        "shadow",
+        "block",
+        "off"
+      ],
       "default": "shadow"
     },
     "planXhigh": {
@@ -62,6 +66,47 @@
       "title": "Plan mode xhigh",
       "description": "In plan mode, send each main-loop model request at xhigh effort. An /effort typed in the session turns it off for that session.",
       "default": true
+    },
+    "secretBox": {
+      "type": "boolean",
+      "title": "Secret Box",
+      "description": "Give Claude a request_secret tool: you type a secret into a masked box, it is saved to the project .env, and Claude gets the variable name only. Also refuses git add or commit of a .env file, and @.env in a prompt.",
+      "default": true
+    },
+    "promptBouncer": {
+      "type": "string",
+      "title": "Prompt Bouncer",
+      "description": "In a repo with a GLOSSARY.md, a Haiku check compares each typed prompt with bouncerDocs and suggests the project term. warn: the prompt goes in at once, a toast shows the suggestion. block: the prompt is dropped with the suggestion; /force <prompt> sends it anyway. off: nothing.",
+      "options": [
+        "warn",
+        "block",
+        "off"
+      ],
+      "default": "warn"
+    },
+    "bouncerDocs": {
+      "type": "string",
+      "title": "Prompt Bouncer docs",
+      "description": "Files relative to the project folder that the check reads, split by commas.",
+      "default": "GLOSSARY.md,CLAUDE.md"
+    },
+    "bouncerMaxChars": {
+      "type": "number",
+      "title": "Prompt Bouncer docs limit",
+      "description": "The maximum characters of bouncerDocs sent to the check.",
+      "default": 20000
+    },
+    "diagramPane": {
+      "type": "boolean",
+      "title": "Diagram Pane",
+      "description": "A side pane that pins the mermaid and box diagrams Claude writes, and draws a map of the work. The map costs a Haiku call every diagramEveryTurns turns, and a session fork when the work changed shape.",
+      "default": false
+    },
+    "diagramEveryTurns": {
+      "type": "number",
+      "title": "Diagram Pane interval",
+      "description": "Turns between two checks of the work map.",
+      "default": 3
     }
   }
 }

@@ -22,12 +22,14 @@ const rec = atom({ plugin: "nwdesigns-mods", key: "rec" } as const, false);
 
 const HUMAN = /^(composer|bridge)$/;
 
-async function check<R extends { deny?: unknown; isError?: boolean }>(
-  $: EngineInterface,
-  run: () => Promise<R>,
-): Promise<R> {
+async function check<
+  R extends { deny?: unknown; isError?: boolean; result?: unknown },
+>($: EngineInterface, run: () => Promise<R>): Promise<R> {
   const before = await read($, gen);
   const r = await run();
+  // A check moved to the background has not finished: no pass, no fail.
+  if ((r.result as { backgroundTaskId?: unknown } | null)?.backgroundTaskId)
+    return r;
   try {
     const ok = r.deny === undefined && !r.isError;
     // read() keeps the value this dispatch first saw; update() reads the
@@ -74,11 +76,11 @@ export function registerStatusBand(on: On): void {
     },
   );
 
+  // A check started in the background has no result yet. The `verify` skill
+  // is not a check: its call returns the instructions, and the Bash checks it
+  // runs count here.
   on("tool.call", { tool: "Bash", command: CHECK_COMMAND }, ($, e, next) =>
-    check($, () => next(e)),
-  );
-  on("tool.call", { tool: "Skill", skill: "verify" }, ($, e, next) =>
-    check($, () => next(e)),
+    e.run_in_background ? next(e) : check($, () => next(e)),
   );
 
   on(

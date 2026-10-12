@@ -6,7 +6,7 @@ The nwdesigns plugin marketplace for Claude Code.
 
 | Plugin | What it does |
 |---|---|
-| [nwdesigns-mods](plugins/nwdesigns-mods/README.md) | Secret redaction, Blast Radius, collision guard, recording mode, completion check, plan-mode effort and a status band |
+| [nwdesigns-mods](plugins/nwdesigns-mods/README.md) | Secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer (repos with a `GLOSSARY.md`) and Diagram Pane (off by default). Needs Claude Code 2.1.296 or later. |
 
 Install:
 

@@ -4,8 +4,11 @@ import { bool, pick } from "../lib/util.ts";
 import { registerBlastRadius } from "./blast-radius.tsx";
 import { registerCollisionGuard } from "./collision-guard.ts";
 import { registerCompletionCheck } from "./completion-check.ts";
+import { registerDiagramPane } from "./diagram-pane.tsx";
 import { registerPlanEffort } from "./plan-effort.ts";
+import { registerPromptBouncer } from "./prompt-bouncer.ts";
 import { registerRecording } from "./recording.tsx";
+import { registerSecretBox } from "./secret-box.tsx";
 import { registerSecretRedact } from "./secret-redact.ts";
 import { registerStatusBand } from "./status-band.tsx";
 
@@ -18,7 +21,7 @@ import { registerStatusBand } from "./status-band.tsx";
 // import (each mod file holds its own hooks), and an event has at most one
 // unmatched hook in the whole plugin (the others carry a matcher).
 
-// extraSecretFiles: a list, or one string of paths split on commas.
+// extraSecretFiles, bouncerDocs: a list, or one string of paths split on commas.
 function paths(v: unknown): string[] {
   const list = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
   return list.map((p) => String(p).trim()).filter(Boolean);
@@ -43,4 +46,23 @@ export const register: Register = (on, options) => {
   );
   if (completion !== "off") registerCompletionCheck(on, completion);
   if (bool(options.planXhigh, true)) registerPlanEffort(on);
+  if (bool(options.secretBox, true)) registerSecretBox(on);
+  const bouncer = pick(
+    options.promptBouncer,
+    ["off", "warn", "block"] as const,
+    "warn",
+  );
+  if (bouncer !== "off") {
+    const max = Number(options.bouncerMaxChars);
+    const docs = paths(options.bouncerDocs);
+    registerPromptBouncer(on, {
+      mode: bouncer,
+      docs: docs.length ? docs : ["GLOSSARY.md", "CLAUDE.md"],
+      maxChars: max > 0 ? max : 20000,
+    });
+  }
+  if (bool(options.diagramPane, false)) {
+    const every = Number(options.diagramEveryTurns);
+    registerDiagramPane(on, every > 0 ? every : 3);
+  }
 };

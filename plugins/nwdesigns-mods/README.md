@@ -4,7 +4,7 @@ Safety and hygiene mods for Claude Code, for the nwdesigns team. Each mod runs i
 
 ## Install
 
-You need Claude Code 2.1.287 or later. No environment flag is necessary.
+You need Claude Code 2.1.296 or later (`$.tool.register` and `$.model.fork`). No environment flag is necessary.
 
 ```
 claude plugin marketplace add nwdesigns/claude-plugins
@@ -33,6 +33,13 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 - **Turn off:** `"secretRedact": false`.
 - **Limits:** it does not cover what Claude types into a command, an unknown token format, or a secret that is split or encoded. If a file in `extraSecretFiles` cannot be read and no earlier values are in memory, every tool result is withheld until you fix the file or the setting.
 
+### Secret Box (`secretBox`)
+
+- **What you see:** when Claude needs a secret, it asks with the `request_secret` tool. A masked box opens. You type or paste the value and press Enter. The value goes to the project `.env`, and `.env` goes to `.gitignore` if it is not there. Claude gets the variable name only.
+- **When:** Claude calls the tool, or you ask Claude to "ask me for the Stripe key with secret box". `git add .env`, a commit with `.env` staged, and `@.env` in a prompt are refused.
+- **Turn off:** `"secretBox": false`.
+- **Limits:** Esc or an empty Enter cancels. If nobody answers in 10 minutes, nothing is saved. Secret redaction hides the saved value in later tool results. `git add -A && git commit` in one command is not caught, because the staged list is read before the command runs. If the terminal is too narrow for the pane, the box shows in the band above the prompt.
+
 ### Blast Radius (`blastRadius`)
 
 - **What you see:** a pane that shows what a risky command will change, with **Proceed** (key 1) and **Cancel** (key 2). Cancel has the focus.
@@ -43,7 +50,7 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 ### Status band (`statusBand`)
 
 - **What you see:** one line above the prompt, empty at rest. `● REC` with **stop rec**. `context 52%` with **compact**. `3 edits since the last check` with **verify**. `checked, ready to push` with **push**. Keys 1 to 3 press the buttons.
-- **When:** a check is `bun test`, `bun run typecheck|lint`, `npm test`, `npm run lint|typecheck`, `composer test|lint`, `vendor/bin/phpunit`, `phpcs` or the `verify` skill. **verify** and **push** only fill the prompt box. You press Enter.
+- **When:** a check is `bun test`, `bun run typecheck|lint`, `npm test`, `npm run lint|typecheck`, `composer test|lint`, `vendor/bin/phpunit` or `phpcs`. A check that runs in the background does not count. **verify** and **push** only fill the prompt box. You press Enter.
 - **Turn off:** `"statusBand": false`.
 - **Limits:** the band keeps the rows of other mods and adds its own row below them. While Blast Radius holds a command, the band shows no buttons. In a short pane (about 13 rows) Claude Code gives the band no room, so nothing shows.
 
@@ -75,6 +82,20 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 - **Turn off:** `"planXhigh": false`, or type `/effort` once in the session.
 - **Limits:** subagents keep their own effort.
 
+### Prompt Bouncer (`promptBouncer`, `bouncerDocs`, `bouncerMaxChars`)
+
+- **What you see:** in `warn` mode (the default), your prompt goes in at once. Some seconds later a toast shows "Glossary: <the prompt with the project term>". In `block` mode, the prompt is not sent. The reason and the suggestion show, and `/force <prompt>` sends it anyway.
+- **When:** on each prompt that you type, in a repo that has a `GLOSSARY.md`. A Haiku call compares the prompt with `bouncerDocs` (default `GLOSSARY.md,CLAUDE.md`, at most `bouncerMaxChars` characters) and with the last answer of Claude, so a short reply such as "sì" or "1" passes. Slash commands pass.
+- **Turn off:** `"promptBouncer": "off"`.
+- **Limits:** no `GLOSSARY.md`, no check. One Haiku call per prompt. If Haiku fails or answers late (8 s in `block` mode), the prompt passes.
+
+### Diagram Pane (`diagramPane`, `diagramEveryTurns`)
+
+- **What you see:** a side pane with two parts. The mermaid flowcharts and box diagrams that Claude writes, drawn as boxes and arrows, the newest 5 first. A map of the work: the files and the steps, with ▶ on the current step.
+- **When:** after each turn for the diagrams. Every `diagramEveryTurns` turns (default 3) a Haiku call asks if the work changed shape. Only on yes, a fork of the session draws a new map. `/diagram` checks now, `/diagram force` draws now.
+- **Turn on:** `"diagramPane": true`. It is off by default, because the map costs a Haiku call every few turns and a fork.
+- **Limits:** the pane shows when the terminal is about 144 columns or wider, or after `/diagram`. Only mermaid flowcharts are drawn. Other mermaid charts show as text.
+
 ## Develop
 
 ```
@@ -87,4 +108,4 @@ claude plugin validate .
 
 ## License
 
-Apache-2.0, see `LICENSE`. Blast Radius is a modified copy of the Anthropic sample, see `NOTICE`.
+Apache-2.0, see `LICENSE`. Blast Radius is a modified copy of the Anthropic sample. Secret Box, Prompt Bouncer and Diagram Pane are modified copies of ray-amjad/claude-code-mods (MIT). See `NOTICE`.

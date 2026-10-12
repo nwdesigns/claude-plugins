@@ -73,6 +73,33 @@ function joinDir(dir: string | null, arg: string | undefined): string {
 
 /** The first risky segment of a shell command, or null. */
 export function classify(command: string): Risk | null {
+  return walk(command, classifySegment);
+}
+
+/** Each `git commit` on the line: the folder it runs in (null = the session folder) and whether it takes -a. */
+export function gitCommits(
+  command: string,
+): Array<{ dir: string | null; all: boolean }> {
+  const out: Array<{ dir: string | null; all: boolean }> = [];
+  walk(command, (words, dir) => {
+    const cmd = words[0]?.replace(/^\\/, "");
+    if (cmd !== "git" && !cmd?.endsWith("/git")) return null;
+    const { sub, rest, gitDir } = gitArgs(words.slice(1), dir);
+    if (sub === "commit")
+      out.push({
+        dir: gitDir,
+        all: rest.some((a) => a === "--all" || /^-[a-zA-Z]*a/.test(a)),
+      });
+    return null;
+  });
+  return out;
+}
+
+/** Runs `visit` on each segment's words, with the folder that `cd`, `pushd`, `popd` and `( )` left; the first non-null answer wins. */
+function walk<T>(
+  command: string,
+  visit: (words: string[], dir: string | null) => T | null,
+): T | null {
   let dir: string | null = null; // where a `cd` earlier on the line moved to; null means the session folder
   const scopes: Array<string | null> = []; // dir to restore when a ( subshell ) closes
   const pushed: Array<string | null> = []; // pushd stack, for popd
@@ -84,12 +111,14 @@ export function classify(command: string): Risk | null {
     for (let k = 0; k < opens; k += 1) {
       scopes.push(dir);
     }
-    const risk = classifySegment(raw, dir, pushed);
-    if (risk !== null && !("cd" in risk)) {
-      return risk;
-    }
-    if (risk !== null) {
-      dir = risk.cd; // a cd, pushd or popd moved the folder
+    const words = segmentWords(raw, dir, pushed);
+    if (words !== null && !Array.isArray(words)) {
+      dir = words.cd; // a cd, pushd or popd moved the folder
+    } else if (words !== null) {
+      const found = visit(words, dir);
+      if (found !== null) {
+        return found;
+      }
     }
     for (let k = 0; k < closes && scopes.length > 0; k += 1) {
       dir = scopes.pop()!; // a cd inside ( ... ) doesn't outlive it
@@ -143,11 +172,12 @@ export function riskySearchReplace(args: string[], remote: boolean): boolean {
 }
 
 /** One segment: a risk, { cd } for a folder change, or null. */
-function classifySegment(
+/** A segment's command words with the prefixes gone, or the folder a cd moves to. */
+function segmentWords(
   segment: string,
   dir: string | null,
   pushed: Array<string | null>,
-): Risk | Cd | null {
+): string[] | Cd | null {
   const words = tokenize(
     segment
       .trim()
@@ -195,6 +225,35 @@ function classifySegment(
   if (cmd === "popd") {
     return { cd: pushed.length > 0 ? pushed.pop()! : "-" };
   }
+  return words;
+}
+
+/** Git's own options come before the subcommand; -C moves where it runs. */
+function gitArgs(
+  args: string[],
+  dir: string | null,
+): { sub: string | undefined; rest: string[]; gitDir: string | null } {
+  let gitDir = dir;
+  let i = 0;
+  while (i < args.length && args[i]!.startsWith("-")) {
+    if (args[i] === "-C" && i + 1 < args.length) {
+      gitDir = joinDir(gitDir, args[i + 1]);
+      i += 2;
+    } else if (args[i] === "-c" && i + 1 < args.length) {
+      i += 2;
+    } else {
+      i += 1;
+    }
+  }
+  return { sub: args[i], rest: args.slice(i + 1), gitDir };
+}
+
+function classifySegment(words: string[], dir: string | null): Risk | null {
+  const [first, ...args] = words;
+  if (first === undefined) {
+    return null;
+  }
+  const cmd = first.replace(/^\\/, ""); // \rm skips aliases; it's still rm
   if (cmd === "rm" || cmd.endsWith("/rm")) {
     const flags = args.filter((a) => a.startsWith("-"));
     const recursive = flags.some(
@@ -213,22 +272,8 @@ function classifySegment(
       };
     }
   }
-  if (cmd === "git") {
-    // Git's own options come before the subcommand; -C moves where it runs.
-    let gitDir = dir;
-    let i = 0;
-    while (i < args.length && args[i]!.startsWith("-")) {
-      if (args[i] === "-C" && i + 1 < args.length) {
-        gitDir = joinDir(gitDir, args[i + 1]);
-        i += 2;
-      } else if (args[i] === "-c" && i + 1 < args.length) {
-        i += 2;
-      } else {
-        i += 1;
-      }
-    }
-    const sub = args[i];
-    const rest = args.slice(i + 1);
+  if (cmd === "git" || cmd.endsWith("/git")) {
+    const { sub, rest, gitDir } = gitArgs(args, dir);
     if (sub === "reset" && rest.includes("--hard")) {
       return {
         kind: "git-reset",

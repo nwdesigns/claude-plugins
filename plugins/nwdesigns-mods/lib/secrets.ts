@@ -33,7 +33,16 @@ export function parseEnv(text: string): Named[] {
     if (!/^[A-Za-z_][\w.-]*$/.test(name)) continue;
     let v = line.slice(eq + 1).trim();
     const q = v[0];
-    if (q === '"' || q === "'") {
+    if (q === '"') {
+      // As the shell reads it: \ before \ " $ ` is dropped, any other stays.
+      let s = "";
+      let i = 1;
+      for (; i < v.length && v[i] !== '"'; i++) {
+        if (v[i] === "\\" && '\\"$`'.includes(v[i + 1] ?? "x")) i++;
+        s += v[i];
+      }
+      v = s;
+    } else if (q === "'") {
       const end = v.indexOf(q, 1);
       v = end > 0 ? v.slice(1, end) : v.slice(1);
     } else {
@@ -103,8 +112,16 @@ export function keep(name: string, v: string): boolean {
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Values a person typed into secret-box: always exact secrets, whatever their
+// name. In this module's memory only, like the file values.
+const HANDED = new Map<string, string>();
+export function handed(name: string, value: string): void {
+  if (value.length >= 6) HANDED.set(value, name);
+}
+export const handedCount = () => HANDED.size;
+
 export function buildMatcher(entries: Named[]): Matcher {
-  const names = new Map<string, string>();
+  const names = new Map(HANDED);
   for (const { name, value } of entries)
     if (keep(name, value) && !names.has(value)) names.set(value, name);
   const values = [...names.keys()].sort((a, b) => b.length - a.length);
