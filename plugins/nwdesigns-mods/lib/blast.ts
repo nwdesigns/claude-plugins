@@ -83,7 +83,7 @@ export function gitCommits(
   const out: Array<{ dir: string | null; all: boolean }> = [];
   walk(command, (words, dir) => {
     const cmd = words[0]?.replace(/^\\/, "");
-    if (cmd !== "git") return null;
+    if (cmd !== "git" && !cmd?.endsWith("/git")) return null;
     const { sub, rest, gitDir } = gitArgs(words.slice(1), dir);
     if (sub === "commit")
       out.push({

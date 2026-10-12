@@ -768,6 +768,16 @@ describe("secret-box", () => {
     expect((await bash("git commit -m x")).deny).toBeUndefined();
   });
 
+  test("an absolute git and an unexpanded folder are still checked", async ($, on) => {
+    const w = world(on);
+    w.git = (argv) => (argv[2] === CWD ? ".env\n" : "");
+    const bash = (command: string) =>
+      $.tool.call({ tool: "Bash", tool_use_id: "g", command });
+    expect((await bash("/usr/bin/git commit -m x")).deny).toMatch(/\.env/);
+    expect((await bash('cd "$PWD" && git commit -m x')).deny).toMatch(/\.env/);
+    expect((await bash('git -C "$PWD" commit -m x')).deny).toMatch(/\.env/);
+  });
+
   test(
     "option off: no tool, no guard",
     { options: { secretBox: false } },

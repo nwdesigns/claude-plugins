@@ -73,8 +73,10 @@ async function refusal($: EngineInterface, command: string): Promise<string> {
   const cwd = await $.session.cwd();
   const home = (await $.env.get("HOME")) ?? "";
   for (const { dir, all } of commits) {
+    // A folder the shell would expand ($PWD, `pwd`) is not known here: the
+    // session folder is checked, as for a plain commit.
     const repo =
-      dir === null || dir === "-"
+      dir === null || dir === "-" || /[$`]/.test(dir)
         ? cwd
         : resolvePath(dir === "~" ? "~/" : dir, home, cwd);
     const git = (...args: string[]) =>
