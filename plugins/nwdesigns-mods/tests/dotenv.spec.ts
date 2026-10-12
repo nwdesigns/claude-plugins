@@ -14,10 +14,19 @@ describe("secret-box .env helpers", () => {
     expect(upsertEnv("A=1", "C", "2")).toBe("A=1\nC=2\n");
   });
 
-  test("upsertEnv quotes a value with spaces or #; parseEnv reads it back", () => {
-    const text = upsertEnv("", "P", "a b #c");
-    expect(text).toBe('P="a b #c"\n');
-    expect(parseEnv(text)).toEqual([{ name: "P", value: "a b #c" }]);
+  test("a quoted value reads back the same in parseEnv and in `source .env`", () => {
+    expect(upsertEnv("", "P", "a b #c")).toBe("P='a b #c'\n");
+    for (const value of ["a b #c", "p$(id)`x`\\n", `it's "x" $HOME \\`]) {
+      const text = upsertEnv("", "P", value);
+      expect(parseEnv(text)).toEqual([{ name: "P", value }]);
+      const sh = Bun.spawnSync([
+        "bash",
+        "-c",
+        'eval "$0"; printf %s "$P"',
+        text,
+      ]);
+      expect(sh.stdout.toString()).toBe(value);
+    }
   });
 
   test("ensureIgnored appends .env once", () => {

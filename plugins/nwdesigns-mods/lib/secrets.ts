@@ -33,7 +33,16 @@ export function parseEnv(text: string): Named[] {
     if (!/^[A-Za-z_][\w.-]*$/.test(name)) continue;
     let v = line.slice(eq + 1).trim();
     const q = v[0];
-    if (q === '"' || q === "'") {
+    if (q === '"') {
+      // As the shell reads it: \ before \ " $ ` is dropped, any other stays.
+      let s = "";
+      let i = 1;
+      for (; i < v.length && v[i] !== '"'; i++) {
+        if (v[i] === "\\" && '\\"$`'.includes(v[i + 1] ?? "x")) i++;
+        s += v[i];
+      }
+      v = s;
+    } else if (q === "'") {
       const end = v.indexOf(q, 1);
       v = end > 0 ? v.slice(1, end) : v.slice(1);
     } else {

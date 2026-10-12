@@ -12,11 +12,14 @@ export function isEnvFile(path: string): boolean {
   );
 }
 
-// Plain values stay bare; anything with spaces, quotes or # gets double quotes.
+// Plain values stay bare. Others get single quotes, which `source .env` reads
+// literally ($, backticks and \ included). A value with a ' gets double
+// quotes with \ " $ ` escaped; parseEnv decodes the same four. The box is one
+// line, so a value has no newline.
 function quote(v: string): string {
-  return /^[A-Za-z0-9_\-./:+=@]*$/.test(v)
-    ? v
-    : `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+  if (/^[A-Za-z0-9_\-./:+=@]*$/.test(v)) return v;
+  if (!v.includes("'")) return `'${v}'`;
+  return `"${v.replace(/[\\"$`]/g, (c) => `\\${c}`)}"`;
 }
 
 // The .env text with NAME set to value: its line replaced, else appended.
