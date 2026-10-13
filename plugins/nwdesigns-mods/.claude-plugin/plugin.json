@@ -1,6 +1,6 @@
 {
   "name": "nwdesigns-mods",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer, Diagram Pane and a PHP language server with WordPress stubs.",
   "author": {
     "name": "nwdesigns"
