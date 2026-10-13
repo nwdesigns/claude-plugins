@@ -533,6 +533,21 @@ describe("blast-radius", () => {
     expect(w.core).toEqual(["Bash"]);
   });
 
+  test("bypassPermissions runs a risky command at once; the next default prompt holds again", async ($, on) => {
+    const w = world(on);
+    on("classic.UserPromptSubmit", async () => ({}));
+    await submit($, "bypassPermissions");
+    expect((await $.tool.call(risky)).deny).toBeUndefined();
+    expect(w.core).toEqual(["Bash"]);
+    expect(w.toasts).toEqual([`Blast Radius: bypass mode, running ${RM}`]);
+    await submit($, "default");
+    const call = $.tool.call(risky);
+    await w.clock.settle();
+    await (await pane($)).press({ key: "cancel" });
+    await w.clock.advance(250);
+    expect((await call).deny).toMatch(/Cancel/);
+  });
+
   test("no pane room: the report is drawn in the band, below the rows beneath", async ($, on) => {
     const w = world(on);
     w.placed = false;

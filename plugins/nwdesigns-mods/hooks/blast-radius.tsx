@@ -7,6 +7,7 @@
 // measured; the band fallback is a compact two-row form drawn above the
 // other band rows, which it keeps; isHolding() for the status band.
 // 2026-10-12: `git reset --hard <target>` also reports the branch move.
+// 2026-10-13: in bypassPermissions mode a risky command runs at once.
 //
 // Blast Radius: holds a risky Bash command and shows what it would change.
 //
@@ -52,10 +53,24 @@ let held: Held | null = null;
 /** True while a call waits on Proceed or Cancel: the status band drops its digits. */
 export const isHolding = (): boolean => held !== null;
 
+// The permission mode of the last prompt. In bypassPermissions nobody is
+// there to press Proceed, so a hold would only stall the session.
+let mode = "default";
+
 export function registerBlastRadius(on: On): void {
+  // Matched (any mode string): plan-effort owns the unmatched hook.
+  on("classic.UserPromptSubmit", { permission_mode: /./ }, (_$, e, next) => {
+    mode = String(e.permission_mode);
+    return next(e);
+  });
+
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
     const risk = classify(String(e.command ?? ""));
     if (risk === null) {
+      return next(e);
+    }
+    if (mode === "bypassPermissions") {
+      $.ui.toast(`Blast Radius: bypass mode, running ${risk.label}`);
       return next(e);
     }
     // One hold at a time. If another risky call is already held (a subagent's,
