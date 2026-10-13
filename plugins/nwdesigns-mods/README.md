@@ -96,6 +96,13 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 - **Turn on:** `"diagramPane": true`. It is off by default, because the map costs a Haiku call every few turns and a fork.
 - **Limits:** the pane shows when the terminal is about 144 columns or wider, or after `/diagram`. Only mermaid flowcharts are drawn. Other mermaid charts show as text.
 
+### PHP language server
+
+- **What you see:** Claude's LSP tool and its PHP diagnostics know the WordPress, WP-CLI, ACF PRO and WooCommerce functions and classes. Without the stubs, intelephense reports each `add_action`, `get_field` or `WP_CLI::` call as unknown.
+- **When:** on each `.php` file. The plugin starts `intelephense` with the default PHP stubs plus `wordpress`, and adds the stub files in `php-stubs/` (php-stubs/wp-cli-stubs v2.12.0, woocommerce-stubs v11.2.0, acf-pro-stubs v6.8.2).
+- **Setup:** install the server once with `npm install -g intelephense`. Turn off the official PHP plugin, so two PHP servers do not run: `claude plugin disable php-lsp@claude-plugins-official`.
+- **Limits:** no on/off switch: the server starts only when Claude opens a `.php` file. Indexing the stubs takes some seconds, and LSP calls before it ends find no symbols. A newer plugin or WordPress version needs new stub files.
+
 ## Develop
 
 ```
@@ -108,4 +115,4 @@ claude plugin validate .
 
 ## License
 
-Apache-2.0, see `LICENSE`. Blast Radius is a modified copy of the Anthropic sample. Secret Box, Prompt Bouncer and Diagram Pane are modified copies of ray-amjad/claude-code-mods (MIT). See `NOTICE`.
+Apache-2.0, see `LICENSE`. Blast Radius is a modified copy of the Anthropic sample. Secret Box, Prompt Bouncer and Diagram Pane are modified copies of ray-amjad/claude-code-mods (MIT). The files in `php-stubs/` are unmodified copies from github.com/php-stubs (MIT). See `NOTICE`.
