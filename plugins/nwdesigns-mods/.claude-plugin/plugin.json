@@ -1,12 +1,35 @@
 {
   "name": "nwdesigns-mods",
-  "version": "0.2.1",
-  "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer and Diagram Pane.",
+  "version": "0.3.0",
+  "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer, Diagram Pane and a PHP language server with WordPress stubs.",
   "author": {
     "name": "nwdesigns"
   },
   "license": "Apache-2.0",
   "types": "./types/index.d.ts",
+  "lspServers": {
+    "intelephense": {
+      "command": "intelephense",
+      "args": ["--stdio"],
+      "extensionToLanguage": { ".php": "php" },
+      "settings": {
+        "intelephense": {
+          "stubs": [
+            "apache", "bcmath", "bz2", "calendar", "com_dotnet", "Core", "ctype", "curl", "date", "dba",
+            "dom", "enchant", "exif", "FFI", "fileinfo", "filter", "fpm", "ftp", "gd", "gettext", "gmp",
+            "hash", "iconv", "imap", "intl", "json", "ldap", "libxml", "mbstring", "meta", "mysqli",
+            "oci8", "odbc", "openssl", "pcntl", "pcre", "PDO", "pgsql", "Phar", "posix", "pspell",
+            "random", "readline", "Reflection", "session", "shmop", "SimpleXML", "snmp", "soap",
+            "sockets", "sodium", "SPL", "sqlite3", "standard", "superglobals", "sysvmsg", "sysvsem",
+            "sysvshm", "tidy", "tokenizer", "xml", "xmlreader", "xmlrpc", "xmlwriter", "xsl",
+            "Zend OPcache", "zip", "zlib", "wordpress"
+          ],
+          "environment": { "includePaths": ["${CLAUDE_PLUGIN_ROOT}/php-stubs"] },
+          "files": { "maxSize": 6000000 }
+        }
+      }
+    }
+  },
   "userConfig": {
     "secretRedact": {
       "type": "boolean",
