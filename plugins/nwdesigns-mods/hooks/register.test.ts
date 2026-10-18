@@ -334,6 +334,20 @@ describe("collision-guard", () => {
     await $.tool.call(write(FILE));
     expect([w.asks, w.core]).toEqual([[], ["Write"]]);
   });
+
+  test("bypassPermissions: pass without a question; the next default prompt asks again", async ($, on) => {
+    const w = world(on);
+    on("classic.UserPromptSubmit", async () => ({}));
+    w.files[FILE] = "x";
+    w.mtime[FILE] = w.clock.now() - 3 * 60_000;
+    await submit($, "bypassPermissions");
+    await $.tool.call(write(FILE));
+    expect([w.asks, w.core]).toEqual([[], ["Write"]]);
+    w.mtime[FILE] = w.clock.now() - 2 * 60_000; // another writer again
+    await submit($, "default");
+    await $.tool.call(write(FILE));
+    expect(w.asks).toHaveLength(1);
+  });
 });
 
 // ------------------------------------------------------------------ recording

@@ -15,6 +15,10 @@ const runs = atom(
   { plugin: "nwdesigns-mods", key: "bashRuns" } as const,
   [] as [number, number][],
 );
+// The permission mode of the last prompt. In bypassPermissions nobody is there
+// to answer, and the coordinator gives each worker its own files: pass with a
+// log line, as with no surface (2026-10-18).
+let mode = "default";
 const KEEP = 200;
 const KEEP_RUNS = 100;
 const SCRATCH = /^\/(private\/)?tmp\//;
@@ -43,6 +47,11 @@ async function realPath(
 }
 
 export function registerCollisionGuard(on: On, minutes: number): void {
+  // Matched (any mode string): plan-effort owns the unmatched hook.
+  on("classic.UserPromptSubmit", { permission_mode: /./ }, (_$, e, next) => {
+    mode = String(e.permission_mode);
+    return next(e);
+  });
   // Record every Bash run of this session (subagents included): a file it
   // changes then counts as this session's own.
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
@@ -73,7 +82,11 @@ export function registerCollisionGuard(on: On, minutes: number): void {
           const isForeign =
             foreign(st.mtimeMs, own, now, minutes * 60_000) &&
             !duringOwnRun(st.mtimeMs, await read($, runs));
-          if (isForeign && (await $.session.surfaces()).length === 0) {
+          if (
+            isForeign &&
+            (mode === "bypassPermissions" ||
+              (await $.session.surfaces()).length === 0)
+          ) {
             $.ui.log(
               `nwdesigns-mods collision-guard: ${name} changed ${n} min ago; no one to ask, pass`,
             );

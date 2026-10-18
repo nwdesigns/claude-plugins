@@ -57,7 +57,7 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 ### Collision guard (`collisionGuard`, `collisionMinutes`)
 
 - **What you see:** "shared.ts changed 3 min ago, not by this session. Edit it anyway?"
-- **When:** before Claude edits a file that changed in the last 10 minutes (`collisionMinutes`), and the change did not come from this session.
+- **When:** before Claude edits a file that changed in the last 10 minutes (`collisionMinutes`), and the change did not come from this session. In `bypassPermissions` mode it does not ask: it writes a log line and the edit runs.
 - **Turn off:** `"collisionGuard": false`.
 - **Limits:** it reads the file time only, so it cannot prove who changed the file. Edits that Claude makes with shell commands are not checked.
 
