@@ -49,7 +49,7 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 
 ### Status band (`statusBand`)
 
-- **What you see:** one line above the prompt, empty at rest. `● REC` with **stop rec**. `context 52%` with **compact**. `3 edits since the last check` with **verify**. `checked, ready to push` with **push**. Keys 1 to 3 press the buttons.
+- **What you see:** one line above the prompt, empty at rest. `● REC` with **stop rec**. `context 52%` with **compact**. `3 edits since the last check` with **verify**. `checked, ready to push` with **push**. `2 calls denied this turn` when a tool call of the main loop was denied (a subagent call does not count). Keys 1 to 3 press the buttons.
 - **When:** a check is `bun test`, `bun run typecheck|lint`, `npm test`, `npm run lint|typecheck`, `composer test|lint`, `vendor/bin/phpunit` or `phpcs`. A check that runs in the background does not count. **verify** and **push** only fill the prompt box. You press Enter.
 - **Turn off:** `"statusBand": false`.
 - **Limits:** the band keeps the rows of other mods and adds its own row below them. While Blast Radius holds a command, the band shows no buttons. In a short pane (about 13 rows) Claude Code gives the band no room, so nothing shows.

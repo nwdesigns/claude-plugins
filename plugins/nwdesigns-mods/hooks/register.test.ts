@@ -217,6 +217,17 @@ describe("status-band", () => {
     expect(w.fills).toEqual([["run the project checks", "append"]]);
   });
 
+  test("denied calls show as a count; a new turn clears it", async ($, on) => {
+    const w = world(on);
+    on("turn.start", async (_$, e) => ({ turnId: e.turnId }));
+    w.deny = "refused";
+    await $.tool.call(write(`${CWD}/a.ts`));
+    await $.tool.call(write(`${CWD}/b.ts`));
+    expect(await bandText($)).toBe("2 calls denied this turn");
+    await $.turn.start({ text: "", turnId: "t2" } as never);
+    expect(await bandText($)).toBe("");
+  });
+
   test("the band composes: the drawing beneath still runs", async ($, on) => {
     const w = world(on);
     await $.tool.call(write(`${CWD}/a.ts`));

@@ -19,6 +19,7 @@ const checked = atom(
 );
 const context = atom({ plugin: "nwdesigns-mods", key: "context" } as const, 0);
 const rec = atom({ plugin: "nwdesigns-mods", key: "rec" } as const, false);
+const denied = atom({ plugin: "nwdesigns-mods", key: "denied" } as const, 0);
 
 const HUMAN = /^(composer|bridge)$/;
 
@@ -94,6 +95,23 @@ export function registerStatusBand(on: On): void {
     },
   );
 
+  // A denied call in the main loop: a stuck unattended worker shows here.
+  // Subagent calls do not count, their denials go back to the parent.
+  on("tool.call", { tool: /./ }, async ($, e, next) => {
+    const r = await next(e);
+    if (r.deny !== undefined && e.agentId === undefined)
+      await update($, denied, (n) => (n ?? 0) + 1).catch((err) =>
+        $.ui.log(`nwdesigns-mods status-band: ${msg(err)}`),
+      );
+    return r;
+  });
+
+  on("turn.start", async ($, e, next) => {
+    if (e.agentId === undefined)
+      await update($, denied, () => 0).catch(() => undefined);
+    return next(e);
+  });
+
   // A person's new prompt starts new work: the checked item goes.
   on("prompt.submit", { origin: { kind: HUMAN } }, async ($, e, next) => {
     await update($, checked, () => false).catch((err) =>
@@ -110,6 +128,7 @@ export function registerStatusBand(on: On): void {
       percent: await read($, context),
       edits: await read($, edits),
       checked: await read($, checked),
+      denied: await read($, denied),
     });
     const l = layout(list, e.props.bodyColumns, e.props.isWorking);
     if (!l) return rest;
