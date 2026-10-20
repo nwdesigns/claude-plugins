@@ -15,8 +15,8 @@ import { resolvePath } from "../lib/util.ts";
 // Pure parts of the nwdesigns-mods mods.
 
 describe("status-band", () => {
-  const rest: View = { rec: false, percent: 19, edits: 0, checked: false };
-  const all: View = { rec: true, percent: 52, edits: 7, checked: false };
+  const rest: View = { rec: false, percent: 19, edits: 0, checked: false, denied: 0 };
+  const all: View = { rec: true, percent: 52, edits: 7, checked: false, denied: 0 };
 
   test("at rest the band is empty", () => {
     expect(layout(items(rest), 120, false)).toBeNull();

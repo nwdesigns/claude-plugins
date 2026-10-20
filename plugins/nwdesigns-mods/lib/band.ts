@@ -29,6 +29,7 @@ export type View = {
   percent: number; // context fill
   edits: number;
   checked: boolean;
+  denied: number; // main-loop tool calls denied in the running turn
 };
 
 const B = {
@@ -66,6 +67,14 @@ export function items(v: View): Item[] {
     `${e} edit${e === 1 ? "" : "s"} since the last check`,
     `${e} edit${e === 1 ? "" : "s"}`,
     [B.verify],
+  );
+  const d = v.denied;
+  add(
+    d > 0,
+    "denied",
+    "warn",
+    `${d} call${d === 1 ? "" : "s"} denied this turn`,
+    `${d} denied`,
   );
   add(
     v.checked && e === 0,
