@@ -27,11 +27,11 @@ type Target = {
 
 async function realPath(
   $: EngineInterface,
-  e: Target,
+  file: unknown,
 ): Promise<string | undefined> {
-  if (typeof e.file_path !== "string") return undefined;
+  if (typeof file !== "string") return undefined;
   const home = (await $.env.get("HOME")) ?? "";
-  const path = resolvePath(e.file_path, home, await $.session.cwd());
+  const path = resolvePath(file, home, await $.session.cwd());
   const st = await $.fs.stat(path, { resolve: true }).catch(() => undefined);
   return st?.realPath ?? path;
 }
@@ -40,9 +40,17 @@ const snapKey = (e: Target, path: string) =>
   `${typeof e.agentId === "string" ? e.agentId : "main"}:${path}`;
 
 // Keep (or drop) the current text of `path` as this agent's last view.
-async function snapshot($: EngineInterface, key: string, path: string) {
+// `secretFiles` = the extraSecretFiles of secret-redact: their old values
+// leave its cache when they change, so a diff of them could leak.
+async function snapshot(
+  $: EngineInterface,
+  key: string,
+  path: string,
+  secretFiles: string[],
+) {
   snaps.delete(key); // re-insert: Map order is the LRU order
   if (SECRET_NAME.test(path)) return;
+  for (const f of secretFiles) if ((await realPath($, f)) === path) return;
   const st = await $.fs.stat(path);
   if (st.kind !== "file" || st.size > SNAP_MAX_BYTES) return;
   snaps.set(key, String(await $.fs.read(path)));
@@ -64,16 +72,19 @@ async function diffSince(
   return run.exitCode === 1 && run.stdout ? run.stdout : undefined;
 }
 
-export function registerCollisionGuard(on: On): void {
+export function registerCollisionGuard(on: On, secretFiles: string[]): void {
   on("tool.call", { tool: "Read" }, async ($, e, next) => {
     const r = await next(e);
     const t = e as Target;
-    // A partial Read is no whole view: no snapshot.
-    if (r.deny !== undefined || r.isError || t.offset !== undefined || t.limit !== undefined)
-      return r;
+    if (r.deny !== undefined || r.isError) return r;
     try {
-      const path = await realPath($, t);
-      if (path) await snapshot($, snapKey(t, path), path);
+      const path = await realPath($, t.file_path);
+      if (!path) return r;
+      const key = snapKey(t, path);
+      // A partial Read is no whole view: the old snapshot no longer is this
+      // agent's last view, so drop it (no diff beats a wrong one).
+      if (t.offset !== undefined || t.limit !== undefined) snaps.delete(key);
+      else await snapshot($, key, path, secretFiles);
     } catch (err) {
       $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`);
     }
@@ -84,11 +95,11 @@ export function registerCollisionGuard(on: On): void {
     const r = await next(e);
     const t = e as Target;
     try {
-      const path = await realPath($, t);
+      const path = await realPath($, t.file_path);
       if (!path) return r;
       const key = snapKey(t, path);
       if (r.deny === undefined && !r.isError) {
-        await snapshot($, key, path);
+        await snapshot($, key, path, secretFiles);
         return r;
       }
       const native =

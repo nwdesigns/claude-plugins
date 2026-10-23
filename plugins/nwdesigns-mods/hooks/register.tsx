@@ -34,7 +34,8 @@ export const register: Register = (on, options) => {
     registerSecretRedact(on, paths(options.extraSecretFiles));
   if (bool(options.blastRadius, true)) registerBlastRadius(on);
   if (bool(options.statusBand, true)) registerStatusBand(on);
-  if (bool(options.collisionGuard, true)) registerCollisionGuard(on);
+  if (bool(options.collisionGuard, true))
+    registerCollisionGuard(on, paths(options.extraSecretFiles));
   if (bool(options.recording, true)) registerRecording(on);
   const completion = pick(
     options.completionCheck,

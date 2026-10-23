@@ -367,6 +367,33 @@ describe("collision-guard", () => {
     const r = await $.tool.call(write(ENV));
     expect(r.deny).toContain("(no diff available)");
   });
+
+  test(
+    "an extraSecretFiles file: no snapshot, so no diff",
+    { options: { extraSecretFiles: `${CWD}/auth.json` } },
+    async ($, on) => {
+      const w = world(on);
+      const AUTH = `${CWD}/auth.json`;
+      w.files[AUTH] = '{"k":"old"}\n';
+      await $.tool.call(read(AUTH));
+      w.error = STALE_TEXT;
+      w.diff = '-{"k":"old"}\n+{"k":"new"}\n';
+      const r = await $.tool.call(write(AUTH));
+      expect(r.deny).toContain("(no diff available)");
+    },
+  );
+
+  test("a partial Read drops the old snapshot: no stale diff", async ($, on) => {
+    const w = world(on);
+    w.files[FILE] = "v1\n";
+    await $.tool.call(read(FILE)); // snapshot v1
+    w.files[FILE] = "v2\n";
+    await $.tool.call({ ...(read(FILE) as object), offset: 1, limit: 1 } as never);
+    w.error = STALE_TEXT;
+    w.diff = "-v1\n+v2\n";
+    const r = await $.tool.call(write(FILE));
+    expect(r.deny).toContain("(no diff available)");
+  });
 });
 
 // ------------------------------------------------------------------ recording
