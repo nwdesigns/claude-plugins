@@ -25,6 +25,8 @@ type World = {
   renders: unknown[]; // props that reached the engine's drawing
   result?: unknown; // what the tool returns at the bottom; {} when unset
   deny?: string; // the bottom answers with this deny instead
+  error?: string; // the bottom answers with this error result instead
+  diff?: string; // what /usr/bin/diff prints (exit 1); none = exit 0
   fail?: Record<string, "stat" | "read" | "write">; // path → the fs call that fails (EACCES)
   placed: boolean; // what ui.open answers
   git?: (argv: readonly string[]) => string; // what a git command prints
@@ -98,6 +100,16 @@ function world(on: On): World {
   });
   on("process.run", async (_$, e) => {
     w.argv.push([...e.argv]);
+    if (e.argv[0] === "/usr/bin/diff")
+      return {
+        value: {
+          exitCode: w.diff ? 1 : 0,
+          stdout: w.diff ?? "",
+          stderr: "",
+          isStdoutTruncated: false,
+          isStderrTruncated: false,
+        },
+      };
     // The hold loop polls on `sleep`: it waits on the mocked clock.
     if (e.argv[0] === "sleep") await w.clock.sleep(Number(e.argv[1]) * 1000);
     // Blast Radius measures `rm` with a bash script: 2 files, 2 KB, 1 path.
@@ -138,6 +150,8 @@ function world(on: On): World {
       } as never;
     }
     if (w.deny !== undefined) return { deny: w.deny };
+    if (w.error !== undefined && e.tool !== "Read")
+      return { result: w.error, isError: true } as never;
     w.core.push(String(e.tool));
     if (e.tool === "Write") {
       const { file_path, content } = e as unknown as {
@@ -296,68 +310,89 @@ describe("status-band", () => {
 describe("collision-guard", () => {
   const FILE = `${CWD}/shared.ts`;
 
-  test("a file changed 3 min ago by another writer: ask, Cancel denies", async ($, on) => {
+  const STALE_TEXT =
+    "File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.";
+  const read = (file_path: string) =>
+    ({ tool: "Read", tool_use_id: `tr-${file_path}`, file_path }) as never;
+
+  test("a recently changed file: Write passes, no question", async ($, on) => {
     const w = world(on);
     w.files[FILE] = "x";
-    w.mtime[FILE] = w.clock.now() - 3 * 60_000;
+    w.mtime[FILE] = w.clock.now() - 3 * 60_000; // another writer, 3 min ago
     const r = await $.tool.call(write(FILE));
-    expect(w.asks).toEqual([
-      "shared.ts changed 3 min ago, not by this session. Edit it anyway?",
+    expect([w.asks, w.core, r.deny]).toEqual([[], ["Write"], undefined]);
+  });
+
+  test("stale refusal after a Read: deny with re-read text and the diff", async ($, on) => {
+    const w = world(on);
+    w.files[FILE] = "v1\n";
+    await $.tool.call(read(FILE)); // snapshot v1
+    w.files[FILE] = "v2\n"; // another writer
+    w.error = STALE_TEXT;
+    w.diff = "--- your last read\n+++ now\n@@ -1 +1 @@\n-v1\n+v2\n";
+    const r = await $.tool.call(write(FILE));
+    expect(r.deny).toMatch(/^collision-guard: Read \/srv\/proj\/shared\.ts again, then re-apply/);
+    expect(r.deny).toContain(`Claude Code: ${STALE_TEXT}`);
+    expect(r.deny).toContain("-v1\n+v2");
+    expect(w.argv.find((a) => a[0] === "/usr/bin/diff")).toEqual([
+      "/usr/bin/diff", "-u", "-L", "your last read", "-L", "now", "-", FILE,
     ]);
-    expect(r.deny).toMatch(
-      /^collision-guard: shared.ts changed 3 min ago by another writer \(another session or an editor\)/,
-    );
-    expect(w.core).toEqual([]);
+    expect(w.asks).toEqual([]);
   });
 
-  test("this session's own write is not asked again", async ($, on) => {
+  test("stale refusal without a snapshot: deny with no diff", async ($, on) => {
     const w = world(on);
-    w.files[FILE] = "x";
-    w.mtime[FILE] = w.clock.now() - 3 * 60_000;
-    w.answer = "Edit anyway";
-    await $.tool.call(write(FILE));
-    await $.tool.call(write(FILE));
-    expect(w.asks).toHaveLength(1);
-    expect(w.core).toEqual(["Write", "Write"]);
+    w.files[FILE] = "v2\n";
+    w.error = STALE_TEXT;
+    const r = await $.tool.call(write(FILE));
+    expect(r.deny).toContain("(no diff available)");
+    expect(w.argv.some((a) => a[0] === "/usr/bin/diff")).toBe(false);
   });
 
-  test("a file this session changed through Bash is its own", async ($, on) => {
+  test("other errors pass unchanged", async ($, on) => {
     const w = world(on);
     w.files[FILE] = "x";
-    w.bash = async () => {
-      w.mtime[FILE] = w.clock.now(); // sed -i during the run
-      return true;
-    };
-    await $.tool.call({
-      tool: "Bash",
-      tool_use_id: "tu-sed",
-      command: `sed -i s/a/b/ ${FILE}`,
-    } as never);
-    await $.tool.call(write(FILE));
-    expect([w.asks, w.core]).toEqual([[], ["Bash", "Write"]]);
+    w.error = "File has not been read yet. Read it first before writing to it.";
+    const r = (await $.tool.call(write(FILE))) as { isError?: boolean; deny?: string };
+    expect([r.isError, r.deny]).toEqual([true, undefined]);
   });
 
-  test("no one to ask (-p): pass with a log line", async ($, on) => {
+  test("secret-looking file: no snapshot, so no diff", async ($, on) => {
     const w = world(on);
-    w.files[FILE] = "x";
-    w.mtime[FILE] = w.clock.now() - 3 * 60_000;
-    w.surfaces = [];
-    await $.tool.call(write(FILE));
-    expect([w.asks, w.core]).toEqual([[], ["Write"]]);
+    const ENV = `${CWD}/.env`;
+    w.files[ENV] = "A=1\n";
+    await $.tool.call(read(ENV));
+    w.error = STALE_TEXT;
+    w.diff = "-A=1\n+A=2\n";
+    const r = await $.tool.call(write(ENV));
+    expect(r.deny).toContain("(no diff available)");
   });
 
-  test("bypassPermissions: pass without a question; the next default prompt asks again", async ($, on) => {
+  test(
+    "an extraSecretFiles file: no snapshot, so no diff",
+    { options: { extraSecretFiles: `${CWD}/auth.json` } },
+    async ($, on) => {
+      const w = world(on);
+      const AUTH = `${CWD}/auth.json`;
+      w.files[AUTH] = '{"k":"old"}\n';
+      await $.tool.call(read(AUTH));
+      w.error = STALE_TEXT;
+      w.diff = '-{"k":"old"}\n+{"k":"new"}\n';
+      const r = await $.tool.call(write(AUTH));
+      expect(r.deny).toContain("(no diff available)");
+    },
+  );
+
+  test("a partial Read drops the old snapshot: no stale diff", async ($, on) => {
     const w = world(on);
-    on("classic.UserPromptSubmit", async () => ({}));
-    w.files[FILE] = "x";
-    w.mtime[FILE] = w.clock.now() - 3 * 60_000;
-    await submit($, "bypassPermissions");
-    await $.tool.call(write(FILE));
-    expect([w.asks, w.core]).toEqual([[], ["Write"]]);
-    w.mtime[FILE] = w.clock.now() - 2 * 60_000; // another writer again
-    await submit($, "default");
-    await $.tool.call(write(FILE));
-    expect(w.asks).toHaveLength(1);
+    w.files[FILE] = "v1\n";
+    await $.tool.call(read(FILE)); // snapshot v1
+    w.files[FILE] = "v2\n";
+    await $.tool.call({ ...(read(FILE) as object), offset: 1, limit: 1 } as never);
+    w.error = STALE_TEXT;
+    w.diff = "-v1\n+v2\n";
+    const r = await $.tool.call(write(FILE));
+    expect(r.deny).toContain("(no diff available)");
   });
 });
 

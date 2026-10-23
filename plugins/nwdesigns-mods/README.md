@@ -54,12 +54,12 @@ Remove the plugin with `claude plugin uninstall nwdesigns-mods@nwdesigns --scope
 - **Turn off:** `"statusBand": false`.
 - **Limits:** the band keeps the rows of other mods and adds its own row below them. While Blast Radius holds a command, the band shows no buttons. In a short pane (about 13 rows) Claude Code gives the band no room, so nothing shows.
 
-### Collision guard (`collisionGuard`, `collisionMinutes`)
+### Collision guard (`collisionGuard`)
 
-- **What you see:** "shared.ts changed 3 min ago, not by this session. Edit it anyway?"
-- **When:** before Claude edits a file that changed in the last 10 minutes (`collisionMinutes`), and the change did not come from this session. In `bypassPermissions` mode it does not ask: it writes a log line and the edit runs.
-- **Turn off:** `"collisionGuard": false`.
-- **Limits:** it reads the file time only, so it cannot prove who changed the file. Edits that Claude makes with shell commands are not checked.
+- **What you see:** no question. Claude Code itself refuses a Write or Edit when the file changed after Claude last read it (another pane, Codex, Pi, your editor). The guard replaces that refusal with "collision-guard: Read … again, then re-apply your change" and a diff of the other change. Claude reads the file and applies its change on the new text.
+- **When:** only on that refusal. Every other Write or Edit passes untouched, in every permission mode. The status band counts the refusal as a denied call.
+- **Turn off:** `"collisionGuard": false` (Claude Code still refuses the stale edit, without the diff).
+- **Limits:** the diff needs a whole-file read in this session, of a file up to 256 KB. After `--resume` or a partial read the first refusal has no diff. No diff for files whose name suggests secrets (`.env*`, `*secret*`, `*.pem`). Shell edits and NotebookEdit are not covered.
 
 ### Recording mode (`recording`)
 
