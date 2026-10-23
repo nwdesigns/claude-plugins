@@ -1,130 +1,106 @@
-import { atom, read, update } from "claude-code";
 import type { EngineInterface, On } from "claude-code";
 
-import { duringOwnRun, foreign } from "../lib/collision.ts";
+import { SECRET_NAME, STALE, staleMessage } from "../lib/collision.ts";
 import { msg, resolvePath } from "../lib/util.ts";
 
-// collision-guard: before a Write or Edit, ask when the file changed in the
-// last N minutes and the change is not this session's own write (another
-// session, another agent, an editor). Advisory, not a lock: mtime does not
-// prove who wrote it. A change made during one of this session's Bash runs
-// (its subagents included) counts as its own.
+// collision-guard: no gate and no question. Claude Code itself refuses a Write
+// or Edit to a file that changed after this agent last read it. This mod
+// replaces that refusal with a text that tells the agent to read the file
+// again and re-apply its change, plus a diff of the other writer's change
+// (another agent, session or editor), so the agent goes on alone.
+// The snapshots only feed the diff: a wrong or missing one gives a wrong or
+// missing diff, never a write that Claude Code's own check would refuse.
 
-const writes = atom({ plugin: "nwdesigns-mods", key: "writes" } as const, {});
-const runs = atom(
-  { plugin: "nwdesigns-mods", key: "bashRuns" } as const,
-  [] as [number, number][],
-);
-// The permission mode of the last prompt. In bypassPermissions nobody is there
-// to answer, and the coordinator gives each worker its own files: pass with a
-// log line, as with no surface (2026-10-18).
-let mode = "default";
-const KEEP = 200;
-const KEEP_RUNS = 100;
-const SCRATCH = /^\/(private\/)?tmp\//;
+const SNAP_MAX_BYTES = 256 * 1024;
+const KEEP = 50;
+// agentId:realPath → the text the agent last read or wrote. Module memory
+// only. ponytail: lost on restart, so the first refusal after --resume has no
+// diff; persist the snapshots if that matters.
+const snaps = new Map<string, string>();
 
-type Target = { file_path?: unknown; notebook_path?: unknown };
+type Target = {
+  file_path?: unknown;
+  offset?: unknown;
+  limit?: unknown;
+  agentId?: unknown;
+};
 
 async function realPath(
   $: EngineInterface,
   e: Target,
 ): Promise<string | undefined> {
-  const file = e.file_path ?? e.notebook_path;
-  if (typeof file !== "string") return undefined;
+  if (typeof e.file_path !== "string") return undefined;
   const home = (await $.env.get("HOME")) ?? "";
-  const path = resolvePath(file, home, await $.session.cwd());
-  // A new file has no realPath yet: resolve its folder, so the key a later
-  // stat gives is the same one.
+  const path = resolvePath(e.file_path, home, await $.session.cwd());
   const st = await $.fs.stat(path, { resolve: true }).catch(() => undefined);
-  if (st?.realPath) return st.realPath;
-  const cut = path.lastIndexOf("/");
-  const dir = await $.fs
-    .stat(path.slice(0, cut) || "/", { resolve: true })
-    .catch(() => undefined);
-  return dir?.realPath
-    ? `${dir.realPath.replace(/\/$/, "")}${path.slice(cut)}`
-    : path;
+  return st?.realPath ?? path;
 }
 
-export function registerCollisionGuard(on: On, minutes: number): void {
-  // Matched (any mode string): plan-effort owns the unmatched hook.
-  on("classic.UserPromptSubmit", { permission_mode: /./ }, (_$, e, next) => {
-    mode = String(e.permission_mode);
-    return next(e);
-  });
-  // Record every Bash run of this session (subagents included): a file it
-  // changes then counts as this session's own.
-  on("tool.call", { tool: "Bash" }, async ($, e, next) => {
-    const start = await $.clock.now();
+const snapKey = (e: Target, path: string) =>
+  `${typeof e.agentId === "string" ? e.agentId : "main"}:${path}`;
+
+// Keep (or drop) the current text of `path` as this agent's last view.
+async function snapshot($: EngineInterface, key: string, path: string) {
+  snaps.delete(key); // re-insert: Map order is the LRU order
+  if (SECRET_NAME.test(path)) return;
+  const st = await $.fs.stat(path);
+  if (st.kind !== "file" || st.size > SNAP_MAX_BYTES) return;
+  snaps.set(key, String(await $.fs.read(path)));
+  if (snaps.size > KEEP) snaps.delete(snaps.keys().next().value!);
+}
+
+async function diffSince(
+  $: EngineInterface,
+  key: string,
+  path: string,
+): Promise<string | undefined> {
+  const old = snaps.get(key);
+  if (old === undefined) return undefined;
+  const run = await $.process.run(
+    ["/usr/bin/diff", "-u", "-L", "your last read", "-L", "now", "-", path],
+    { stdin: old, timeoutMs: 2000 },
+  );
+  // diff: 0 = same, 1 = differences, 2 = trouble.
+  return run.exitCode === 1 && run.stdout ? run.stdout : undefined;
+}
+
+export function registerCollisionGuard(on: On): void {
+  on("tool.call", { tool: "Read" }, async ($, e, next) => {
+    const r = await next(e);
+    const t = e as Target;
+    // A partial Read is no whole view: no snapshot.
+    if (r.deny !== undefined || r.isError || t.offset !== undefined || t.limit !== undefined)
+      return r;
     try {
-      return await next(e);
-    } finally {
-      const end = await $.clock.now();
-      await update($, runs, (r) =>
-        [...(r ?? []), [start, end] as [number, number]].slice(-KEEP_RUNS),
-      ).catch((err) => $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`));
+      const path = await realPath($, t);
+      if (path) await snapshot($, snapKey(t, path), path);
+    } catch (err) {
+      $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`);
+    }
+    return r;
+  });
+
+  on("tool.call", { tool: ["Write", "Edit"] }, async ($, e, next) => {
+    const r = await next(e);
+    const t = e as Target;
+    try {
+      const path = await realPath($, t);
+      if (!path) return r;
+      const key = snapKey(t, path);
+      if (r.deny === undefined && !r.isError) {
+        await snapshot($, key, path);
+        return r;
+      }
+      const native =
+        r.deny ?? r.text ?? (typeof r.result === "string" ? r.result : "");
+      if (!STALE.test(native)) return r;
+      const diff = await diffSince($, key, path).catch(() => undefined);
+      // The agent reads the file next; that Read takes the new snapshot.
+      snaps.delete(key);
+      return { deny: staleMessage(native, path, diff) };
+    } catch (err) {
+      $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`);
+      return r;
     }
   });
-  on(
-    "tool.call",
-    { tool: ["Write", "Edit", "NotebookEdit"] },
-    async ($, e, next) => {
-      const t = e as Target;
-      let key: string | undefined;
-      try {
-        key = await realPath($, t);
-        if (key && !SCRATCH.test(key)) {
-          const st = await $.fs.stat(key);
-          const now = await $.clock.now();
-          const own = (await read($, writes))[key];
-          const n = Math.max(0, Math.round((now - st.mtimeMs) / 60_000));
-          const name = key.slice(key.lastIndexOf("/") + 1);
-          const isForeign =
-            foreign(st.mtimeMs, own, now, minutes * 60_000) &&
-            !duringOwnRun(st.mtimeMs, await read($, runs));
-          if (
-            isForeign &&
-            (mode === "bypassPermissions" ||
-              (await $.session.surfaces()).length === 0)
-          ) {
-            $.ui.log(
-              `nwdesigns-mods collision-guard: ${name} changed ${n} min ago; no one to ask, pass`,
-            );
-          } else if (isForeign) {
-            const answer = await $.ui
-              .ask(
-                `${name} changed ${n} min ago, not by this session. Edit it anyway?`,
-                ["Edit anyway", "Cancel"],
-              )
-              // Dismissed by the person: a deny, as Cancel.
-              .catch(() => "Cancel");
-            if (answer !== "Edit anyway")
-              return {
-                deny: `collision-guard: ${name} changed ${n} min ago by another writer (another session or an editor). The user cancelled. Ask the user how to proceed.`,
-              };
-          }
-        }
-      } catch (err) {
-        // ENOENT is a new file; any other stat error passes with a log line.
-        if (!/ENOENT/.test(msg(err)))
-          $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`);
-      }
-      const r = await next(e);
-      if (key && r.deny === undefined && !r.isError) {
-        try {
-          const { mtimeMs } = await $.fs.stat(key);
-          await update($, writes, (w) =>
-            Object.fromEntries(
-              Object.entries({ ...w, [key!]: mtimeMs })
-                .sort(([, a], [, b]) => b - a)
-                .slice(0, KEEP),
-            ),
-          );
-        } catch (err) {
-          $.ui.log(`nwdesigns-mods collision-guard: ${msg(err)}`);
-        }
-      }
-      return r;
-    },
-  );
 }

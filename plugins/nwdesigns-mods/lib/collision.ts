@@ -1,33 +1,48 @@
-// collision-guard: pure part. Advisory, not a lock: mtime does not prove who
-// wrote the file.
+// collision-guard: pure part. Claude Code itself refuses a Write or Edit to a
+// file that changed after the last Read; this part words that refusal so the
+// agent goes on alone, with a diff of the other writer's change.
 
-// ponytail: a change up to 10 s after this session's own write counts as its
-// own (the php-cs-fixer post-write hook), so a real concurrent edit in those
-// 10 s goes unseen; record the formatter's write if that matters.
-export const OWN_GRACE_MS = 10_000;
+// Claude Code's text for a stale Write/Edit (2.1.309): "File has been
+// modified since read, either by the user or by a linter. Read it again
+// before attempting to write it."
+export const STALE = /modified since read/i;
 
-// True when the mtime falls inside one of this session's Bash runs [start, end]
-// (plus the grace): a sed, a heredoc, a formatter or a git checkout of its own.
-// ponytail: another writer that changes the file during our Bash run also
-// counts as own; per-file tracking needs a filesystem watcher.
-export function duringOwnRun(
-  mtimeMs: number,
-  runs: readonly (readonly [number, number])[],
-): boolean {
-  return runs.some(
-    ([start, end]) => mtimeMs >= start - 1000 && mtimeMs <= end + OWN_GRACE_MS,
-  );
+// No snapshot (and so no diff) for files that can hold secrets: a diff of an
+// old version can show a value that the redactor no longer matches.
+export const SECRET_NAME =
+  /(^|\/)(\.env[^/]*|[^/]*(secret|credential|password)[^/]*|[^/]*\.(pem|key|p12))$/i;
+
+export const MAX_LINES = 120;
+export const MAX_CHARS = 8192;
+
+// Cut a unified diff at MAX_LINES lines or MAX_CHARS characters, with a marker.
+export function capDiff(diff: string): string {
+  const lines = diff.replace(/\n$/, "").split("\n");
+  const out: string[] = [];
+  let size = 0;
+  // ponytail: counts characters, not bytes; close enough for a context cap.
+  for (const line of lines.slice(0, MAX_LINES)) {
+    size += line.length + 1;
+    if (size > MAX_CHARS) break;
+    out.push(line);
+  }
+  const text = out.join("\n");
+  return out.length < lines.length ? `${text}\n(truncated, read the file)` : text;
 }
 
-// True when the file changed inside the window and the change is not this
-// session's last write.
-export function foreign(
-  mtimeMs: number,
-  ownMtimeMs: number | undefined,
-  now: number,
-  windowMs: number,
-): boolean {
-  if (now - mtimeMs > windowMs) return false;
-  if (ownMtimeMs === undefined) return true;
-  return mtimeMs - ownMtimeMs > OWN_GRACE_MS || mtimeMs < ownMtimeMs;
+// The deny text that replaces Claude Code's stale refusal.
+export function staleMessage(
+  native: string,
+  path: string,
+  diff: string | undefined,
+): string {
+  const body = diff ? capDiff(diff) : "(no diff available)";
+  return (
+    `collision-guard: Read ${path} again, then re-apply your change on the current text. ` +
+    "Another agent, session or editor changed it after you last read it. " +
+    "Not an error in your edit, no approval needed. " +
+    "If the diff below already contains your change, skip it.\n" +
+    `Claude Code: ${native.replace(/<\/?tool_use_error>/g, "").trim()}\n` +
+    `--- changed since your last read ---\n${body}`
+  );
 }

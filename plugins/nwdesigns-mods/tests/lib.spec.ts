@@ -8,7 +8,13 @@ import {
   PUSH_COMMAND,
   type View,
 } from "../lib/band.ts";
-import { duringOwnRun, foreign } from "../lib/collision.ts";
+import {
+  capDiff,
+  MAX_LINES,
+  SECRET_NAME,
+  STALE,
+  staleMessage,
+} from "../lib/collision.ts";
 import { redact, redactDeep } from "../lib/redact.ts";
 import { resolvePath } from "../lib/util.ts";
 
@@ -77,28 +83,43 @@ describe("status-band", () => {
 });
 
 describe("collision-guard", () => {
-  const MIN = 60_000;
-  const now = 100 * MIN;
-
-  test("in the window and not this session's write → foreign", () => {
-    expect(foreign(now - 3 * MIN, undefined, now, 10 * MIN)).toBe(true);
-    expect(foreign(now - 3 * MIN, now - 5 * MIN, now, 10 * MIN)).toBe(true);
+  test("STALE matches Claude Code's refusal, not other errors", () => {
+    expect(
+      STALE.test(
+        "File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.",
+      ),
+    ).toBe(true);
+    expect(STALE.test("File has not been read yet. Read it first.")).toBe(false);
   });
 
-  test("own write, formatter grace, outside the window → not foreign", () => {
-    expect(foreign(now - 3 * MIN, now - 3 * MIN, now, 10 * MIN)).toBe(false);
-    expect(foreign(now - 3 * MIN + 5000, now - 3 * MIN, now, 10 * MIN)).toBe(
-      false,
-    );
-    expect(foreign(now - 11 * MIN, undefined, now, 10 * MIN)).toBe(false);
+  test("capDiff: short diff unchanged; long diff cut at MAX_LINES or the size cap", () => {
+    expect(capDiff("@@ -1 +1 @@\n-a\n+b\n")).toBe("@@ -1 +1 @@\n-a\n+b");
+    const long = Array.from({ length: 200 }, (_, i) => `+line ${i}`).join("\n");
+    const cut = capDiff(long).split("\n");
+    expect(cut).toHaveLength(MAX_LINES + 1);
+    expect(cut[cut.length - 1]).toBe("(truncated, read the file)");
+    const wide = Array.from({ length: 10 }, () => `+${"x".repeat(1000)}`).join("\n");
+    expect(capDiff(wide).split("\n")).toHaveLength(9); // 8 lines fit 8192 chars
   });
 
-  test("a change during this session's Bash run (or its grace) is own", () => {
-    const runs = [[now - 4 * MIN, now - 4 * MIN + 2000]] as [number, number][];
-    expect(duringOwnRun(now - 4 * MIN + 1000, runs)).toBe(true);
-    expect(duringOwnRun(now - 4 * MIN + 2000 + 9000, runs)).toBe(true);
-    expect(duringOwnRun(now - 3 * MIN, runs)).toBe(false);
-    expect(duringOwnRun(now - 3 * MIN, [])).toBe(false);
+  test("staleMessage: path, re-read instruction, native text, diff or placeholder", () => {
+    const m = staleMessage("File has been modified since read.", "/p/a.ts", "-a\n+b");
+    expect(m).toMatch(/^collision-guard: Read \/p\/a\.ts again, then re-apply/);
+    expect(m).toContain("no approval needed");
+    expect(m).toContain("Claude Code: File has been modified since read.");
+    expect(m.endsWith("--- changed since your last read ---\n-a\n+b")).toBe(true);
+    expect(staleMessage("x", "/p/a.ts", undefined)).toContain("(no diff available)");
+    // The live refusal arrives wrapped (2.1.309).
+    expect(
+      staleMessage("<tool_use_error>File has been modified since read.</tool_use_error>", "/p/a.ts", undefined),
+    ).toContain("Claude Code: File has been modified since read.\n");
+  });
+
+  test("SECRET_NAME: no snapshot for secret-looking files", () => {
+    for (const p of ["/p/.env", "/p/.env.local", "/p/db-secret.json", "/k/id.pem"])
+      expect(SECRET_NAME.test(p)).toBe(true);
+    for (const p of ["/p/src/env.ts", "/p/README.md", "/p/keyboard.ts"])
+      expect(SECRET_NAME.test(p)).toBe(false);
   });
 
   test("resolvePath: ~ and cwd-relative paths", () => {

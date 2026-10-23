@@ -12,8 +12,6 @@ declare module "claude-code" {
       denied: number; // main-loop tool calls denied in the running turn
       context: number; // the last main-thread context fill, in percent
       rec: boolean;
-      writes: Record<string, number>; // realPath → mtime of this session's writes
-      bashRuns: [number, number][]; // [start, end] ms of this session's Bash runs
       effort: NwdesignsModsEffort | null;
     };
   }

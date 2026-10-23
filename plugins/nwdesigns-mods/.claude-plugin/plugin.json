@@ -1,6 +1,6 @@
 {
   "name": "nwdesigns-mods",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "nwdesigns team mods: secret redaction, Secret Box, Blast Radius, collision guard, recording mode, completion check, plan-mode effort, a status band, Prompt Bouncer, Diagram Pane and a PHP language server with WordPress stubs.",
   "author": {
     "name": "nwdesigns"
@@ -58,14 +58,8 @@
     "collisionGuard": {
       "type": "boolean",
       "title": "Collision guard",
-      "description": "Before a Write or Edit, ask when the file changed in the last collisionMinutes and not by this session (another session, an editor). Advisory: mtime does not prove who wrote it, and Bash writes are not covered.",
+      "description": "When Claude Code refuses a Write or Edit because the file changed after the last read (another agent, session or editor), replace the refusal with a re-read instruction and a diff of that change. Never asks. Bash writes and NotebookEdit are not covered.",
       "default": true
-    },
-    "collisionMinutes": {
-      "type": "number",
-      "title": "Collision window",
-      "description": "Minutes the collision guard looks back.",
-      "default": 10
     },
     "recording": {
       "type": "boolean",
